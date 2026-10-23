@@ -2,8 +2,11 @@ import { blocks, modules as syllabus, exercises as firstExercises, questions as 
 import { lessons as firstLessons } from './lessons.js';
 import type { ModuleContent } from './types.js';
 
+import { module02 } from './module02.js';
+
 export const moduleContents: ModuleContent[] = [
   { moduleId: 1, lessons: firstLessons, exercises: firstExercises, questions: firstQuestions, glossary: firstGlossary },
+  module02,
 ];
 export { blocks };
 export const lessons = moduleContents.flatMap(content => content.lessons);
