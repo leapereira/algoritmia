@@ -1,27 +1,5 @@
-export type LessonSection = {
-  title: string;
-  paragraphs: string[];
-  code?: string;
-  language?: 'java' | 'text';
-  bullets?: string[];
-};
-
-export type Lesson = {
-  id: string;
-  moduleId: 1;
-  title: string;
-  duration: number;
-  summary: string;
-  objectives: string[];
-  prerequisites: string[];
-  sections: LessonSection[];
-  complexity: { time: string; space: string; explanation: string };
-  pitfalls: string[];
-  solved: { title: string; explanation: string; code: string };
-  practice: { title: string; prompt: string };
-  takeaways: string[];
-  visualization?: 'max' | 'reverse' | 'duplicates' | 'linear' | 'binary' | 'bubble';
-};
+import type { Lesson } from './types.js';
+export type { Lesson, LessonSection } from './types.js';
 
 export const lessons: Lesson[] = [
   {
