@@ -16,6 +16,8 @@ function integerSequence(value: string): number[] | null {
 }
 
 export function checkExerciseAnswer(exercise: ExerciseAnswer, response: string): boolean {
+  if (!exercise.answer.trim()) return false;
+  const accepted = [...new Set([exercise.answer, ...exercise.accepted])];
   if (exercise.id === 'invertir-pseudocodigo') {
     const expected = integerSequence(exercise.answer);
     const actual = integerSequence(response);
@@ -25,8 +27,8 @@ export function checkExerciseAnswer(exercise: ExerciseAnswer, response: string):
   if (/^[+-]?\d+$/.test(normalize(exercise.answer))) {
     // Un espacio no puede convertir dos tokens en un único número.
     if (!/^[+-]?\d+$/.test(actual)) return false;
-    return exercise.accepted.some(answer => normalize(answer) === actual);
+    return accepted.some(answer => normalize(answer) === actual);
   }
   const expression = (value: string) => normalize(value).replace(/\s/g, '');
-  return exercise.accepted.some(answer => expression(answer) === expression(response));
+  return accepted.some(answer => expression(answer) === expression(response));
 }

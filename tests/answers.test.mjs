@@ -50,3 +50,8 @@ test('la revisión manual no puede aprobarse mediante una respuesta textual', ()
   assert.equal(checkExerciseAnswer(implementation, ''), false);
   assert.equal(checkExerciseAnswer(implementation, implementation.solution), false);
 });
+
+test('la respuesta canónica se acepta aunque las equivalencias solo incluyan sinónimos',()=>{
+  assert.equal(checkExerciseAnswer({id:'canonical',answer:'4',accepted:['4.0']},'4'),true);
+  assert.equal(checkExerciseAnswer({id:'manual',answer:'',accepted:[]},''),false);
+});
