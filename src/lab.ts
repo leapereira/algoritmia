@@ -7,6 +7,13 @@ const examples: Record<AlgorithmId, { values: number[]; target: number }> = {
   linear: { values: [12, 5, 28, 9, 35, 17, 23], target: 17 },
   binary: { values: [3, 7, 12, 17, 23, 28, 35], target: 23 },
   bubble: { values: [12, 5, 28, 9, 35, 17, 23], target: 17 },
+  selection: { values: [12, 5, 28, 9, 35, 17, 23], target: 17 },
+  insertion: { values: [12, 5, 28, 9, 35, 17, 23], target: 17 },
+  merge: { values: [12, 5, 28, 9, 35, 17, 23], target: 17 },
+  quick: { values: [12, 5, 28, 9, 35, 17, 23], target: 17 },
+  heap: { values: [12, 5, 28, 9, 35, 17, 23], target: 17 },
+  counting: { values: [4, -2, 1, 4, -2, 0, 3], target: 17 },
+  radix: { values: [12, -5, 28, -19, 35, 17, 23], target: 17 },
 };
 
 const cases: Record<AlgorithmId, string> = {
@@ -16,6 +23,13 @@ const cases: Record<AlgorithmId, string> = {
   linear: 'Mejor caso: O(1), si el objetivo está al principio. Peor caso: O(n), si está al final o no aparece.',
   binary: 'Mejor caso: O(1), si el objetivo está en el centro. Peor caso: O(log n). Requiere orden ascendente; ordenar tiene un costo adicional.',
   bubble: 'Mejor caso: O(n), si ya está ordenado y una pasada no produce cambios. Promedio y peor caso: O(n²).',
+  selection: 'Mejor y peor caso: Θ(n²), porque siempre compara todos los candidatos del sufijo. Hace como máximo n − 1 intercambios. Auxiliar Θ(1); no es estable.',
+  insertion: 'Mejor caso: Θ(n), si el arreglo ya está ordenado. Peor caso: Θ(n²). Guarda x y desplaza valores; no hace intercambios. Auxiliar Θ(1); es estable.',
+  merge: 'Tiempo Θ(n log n), independiente del orden inicial para n ≥ 2. Usa un búfer Θ(n) y pila O(log n). Elige izquierda al empatar: es estable. Las copias al búfer y al arreglo son asignaciones, no intercambios.',
+  quick: 'Pivote final y partición de Lomuto: particiones equilibradas Θ(n log n), pero ordenados y muchos iguales pueden costar Θ(n²) y pila Θ(n). Esta versión no usa pivote aleatorio ni promete costo esperado logarítmico. No es estable.',
+  heap: 'Construir el Max-Heap desde abajo cuesta Θ(n). Ordenar tiene peor caso O(n log n) y usa Θ(1) auxiliar con hundimiento iterativo. No es estable.',
+  counting: 'Tiempo y auxiliar Θ(n + k), con k = máximo − mínimo + 1. Acepta negativos usando la clave x − mínimo. Es estable. Solo la búsqueda de mínimo/máximo compara valores; las frecuencias y copias no son intercambios.',
+  radix: 'Tiempo O(n + d(n + 10)) y auxiliar Θ(n + 10), con d pasadas decimales para máximo − mínimo. Si todas las claves son iguales, bastan el recorrido inicial Θ(n) y cero pasadas. Cada pasada decimal es estable. La clave x − mínimo admite negativos sin alterar su orden. Las copias no son intercambios.',
 };
 
 function parseValues(raw: string): number[] {
@@ -65,6 +79,7 @@ export function mountLab(root: HTMLElement, initial: AlgorithmId = 'max'): () =>
           <div class="lab-legend"><span><i class="lab-key lab-key-pending"></i>Pendiente</span><span><i class="lab-key lab-key-active"></i>En este paso</span><span><i class="lab-key lab-key-done"></i>Confirmado</span></div>
           <div class="lab-visual" tabindex="0" role="group" aria-label="Visualización del arreglo. Espacio: reproducir o pausar. Flechas: paso anterior o siguiente." aria-keyshortcuts="Space ArrowLeft ArrowRight Home End"></div>
           <p class="lab-magnitude-note">Altura según magnitud · índices desde 0</p>
+          <div class="lab-step-message lab-auxiliary" hidden><span class="lab-step-kicker"></span><p></p></div>
           <div class="lab-step-message" aria-live="polite" aria-atomic="true"><span class="lab-step-kicker"></span><p></p></div>
           <div class="lab-result" hidden></div>
           <div class="lab-transport">
@@ -93,7 +108,7 @@ export function mountLab(root: HTMLElement, initial: AlgorithmId = 'max'): () =>
   const result = get<HTMLElement>('.lab-result');
   const progress = get<HTMLProgressElement>('.lab-progress');
   const speedInput = get<HTMLInputElement>(`#${uid}-speed`);
-  const message = get<HTMLElement>('.lab-step-message');
+  const message = get<HTMLElement>('.lab-step-message:not(.lab-auxiliary)');
 
   function clearTimer() {
     if (timer !== undefined) clearTimeout(timer);
@@ -140,8 +155,12 @@ export function mountLab(root: HTMLElement, initial: AlgorithmId = 'max'): () =>
       if (active) line.setAttribute('aria-current', 'step');
       else line.removeAttribute('aria-current');
     });
-    get<HTMLElement>('.lab-step-kicker').textContent = index === 0 ? 'ESTADO INICIAL' : index === trace.length - 1 ? 'EJECUCIÓN COMPLETA' : `PASO ${index}`;
-    get<HTMLElement>('.lab-step-message p').textContent = step.message;
+    get<HTMLElement>('.lab-step-message:not(.lab-auxiliary) .lab-step-kicker').textContent = index === 0 ? 'ESTADO INICIAL' : index === trace.length - 1 ? 'EJECUCIÓN COMPLETA' : `PASO ${index}`;
+    get<HTMLElement>('.lab-step-message:not(.lab-auxiliary) p').textContent = step.message;
+    const aux = get<HTMLElement>('.lab-auxiliary');
+    aux.hidden = !step.auxiliary;
+    aux.querySelector('span')!.textContent = step.auxiliary?.label ?? '';
+    aux.querySelector('p')!.textContent = step.auxiliary ? `[ ${step.auxiliary.values.map(value => value === null ? '·' : String(value)).join(', ')} ]` : '';
     // Playback avoids flooding a screen reader; manual stepping announces each state.
     message.setAttribute('aria-live', playing ? 'off' : 'polite');
     get<HTMLElement>('.lab-comparisons').textContent = String(step.comparisons);
@@ -161,7 +180,11 @@ export function mountLab(root: HTMLElement, initial: AlgorithmId = 'max'): () =>
     get<HTMLElement>('.lab-algorithm-description').textContent = meta.description;
     get<HTMLElement>('.lab-complexity').textContent = meta.complexity.split(' · ')[0]!;
     get<HTMLElement>('.lab-cases').textContent = cases[id];
-    get<HTMLElement>('.lab-counter-note').textContent = id === 'binary'
+    get<HTMLElement>('.lab-counter-note').textContent = ['merge', 'insertion'].includes(id)
+      ? 'Las comparaciones entre valores sí se cuentan. Guardar, desplazar o copiar valores son asignaciones: esta implementación no realiza intercambios.'
+      : ['counting', 'radix'].includes(id)
+      ? 'Solo la búsqueda de mínimo y máximo compara valores. Contar claves, acumular frecuencias y copiar a salida son operaciones reales que no se cuentan como intercambios.'
+      : id === 'binary'
       ? 'Cada igualdad y cada comparación de orden entre valores cuenta por separado. Las condiciones de los índices no se cuentan.'
       : id === 'reverse' ? 'Invertir usa índices e intercambios: no necesita comparar valores entre sí.'
       : 'Contamos comparaciones entre valores. Las condiciones de los índices no se cuentan.';

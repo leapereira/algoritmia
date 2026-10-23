@@ -2,12 +2,13 @@ import { blocks, modules, exercises, questions, glossary, lessons, moduleLessons
 import { moduleStats, courseProgress, gradeAssessment } from './learning.js';
 import { referencesForModule } from './data/references.js';
 import { optionOrder } from './assessment.js';
+import { javaDownload } from './java-download.js';
 import { loadProgress, saveProgress } from './storage.js';
 import { checkExerciseAnswer } from './answers.js';
 import { mountLab } from './lab.js';
 import { mountRecursion } from './recursion.js';
 import { mountPlayground, playgroundNames, type PlaygroundId } from './playgrounds.js';
-import type { AlgorithmId } from './algorithms.js';
+import { algorithms, type AlgorithmId } from './algorithms.js';
 
 const app = document.querySelector<HTMLElement>('#app')!;
 const progress = loadProgress(questions);
@@ -167,7 +168,7 @@ function complexityRows(n: number) {
   const number=(x:number)=>x>1e12?x.toExponential(2).replace('e+',' × 10^'):x.toLocaleString('es-UY',{maximumFractionDigits:2});
   return [['O(1)','1','1','Acceso a un arreglo por índice'],['O(log n)','log₂ n',number(Math.log2(n)),'Búsqueda binaria en un arreglo ordenado'],['O(n)','n',number(n),'Recorrer un arreglo'],['O(n log n)','n · log₂ n',number(n*Math.log2(n)),'Merge Sort (tiempo)'],['O(n²)','n²',number(n*n),'Comparar todos los pares'],['O(2ⁿ)','2ⁿ',number(2**n),'Enumerar todos los subconjuntos'],['O(n!)','n!',fact,'Enumerar todas las permutaciones']].map(r=>`<tr><td><code>${r[0]}</code></td><td>${r[1]}</td><td>${r[2]}</td><td>${r[3]}</td></tr>`).join('');
 }
-function labPage() { const selection=route.split('/')[1]||'max';return pageHeading('Mira lo que pasa entre líneas.', 'Cambia los datos, haz preguntas y observa cómo responde cada algoritmo.')+`<div class="lab-selector"><label for="lab-kind">Elige un laboratorio</label><select class="select" id="lab-kind"><optgroup label="Algoritmos y recursión">${[['max','Encontrar máximo'],['reverse','Invertir arreglo'],['duplicates','Detectar duplicados'],['linear','Búsqueda lineal'],['binary','Búsqueda binaria'],['bubble','Ordenamiento burbuja'],['recursion','Pila recursiva']].map(([id,title])=>`<option value="${id}" ${selection===id?'selected':''}>${title}</option>`).join('')}</optgroup><optgroup label="Estructuras y técnicas">${Object.entries(playgroundNames).map(([id,title])=>`<option value="${id}" ${selection===id?'selected':''}>${title}</option>`).join('')}</optgroup></select></div><div id="main-lab"></div>`; }
+function labPage() { const selection=route.split('/')[1]||'max';return pageHeading('Mira lo que pasa entre líneas.', 'Cambia los datos, haz preguntas y observa cómo responde cada algoritmo.')+`<div class="lab-selector"><label for="lab-kind">Elige un laboratorio</label><select class="select" id="lab-kind"><optgroup label="Algoritmos y recursión">${Object.entries(algorithms).map(([id,algorithm])=>`<option value="algo-${id}" ${selection===`algo-${id}`||(selection===id&&!(id in playgroundNames))?'selected':''}>${esc(algorithm.title)}</option>`).join('')}<option value="recursion" ${selection==='recursion'?'selected':''}>Pila recursiva</option></optgroup><optgroup label="Estructuras y técnicas">${Object.entries(playgroundNames).map(([id,title])=>`<option value="${id}" ${selection===id?'selected':''}>${title}</option>`).join('')}</optgroup></select></div><div id="main-lab"></div>`; }
 function notFound() { return `<div class="panel"><h1>No encontramos esta página.</h1><p>Puedes retomar tu recorrido desde el programa del curso.</p><a class="btn btn-primary" href="#course">Volver al curso ${icon('arrow')}</a></div>`; }
 function render(keepScroll=false) {
   const oldScroll=window.scrollY;
@@ -187,10 +188,10 @@ function render(keepScroll=false) {
   else body=notFound();
   app.innerHTML=shell(body,title);
   document.title=`${title} · Algoritmia`;
-  if(page==='lab'){const root=document.querySelector<HTMLElement>('#main-lab')!;cleanup=id==='recursion'?mountRecursion(root):id in playgroundNames?mountPlayground(root,id as PlaygroundId):mountLab(root,(['max','reverse','duplicates','linear','binary','bubble'].includes(id)?id:'max') as AlgorithmId);document.querySelector('#lab-kind')!.addEventListener('change',e=>navigate(`#lab/${(e.target as HTMLSelectElement).value}`));}
+  if(page==='lab'){const root=document.querySelector<HTMLElement>('#main-lab')!;const algorithmId=id?.replace(/^algo-/,'')||'max';cleanup=id?.startsWith('algo-')?mountLab(root,(algorithmId in algorithms?algorithmId:'max') as AlgorithmId):id==='recursion'?mountRecursion(root):id in playgroundNames?mountPlayground(root,id as PlaygroundId):mountLab(root,(algorithmId in algorithms?algorithmId:'max') as AlgorithmId);document.querySelector('#lab-kind')!.addEventListener('change',e=>navigate(`#lab/${(e.target as HTMLSelectElement).value}`));}
   if(page==='lesson') {
     const lesson=lessons.find(l=>l.id===id);
-    if(lesson?.lab==='recursion'||id==='recursion')cleanup=mountRecursion(document.querySelector('#lesson-lab')!);else if(lesson?.lab)cleanup=mountPlayground(document.querySelector('#lesson-lab')!,lesson.lab);else if(lesson?.visualization)cleanup=mountLab(document.querySelector('#lesson-lab')!,lesson.visualization);
+    const lab=lesson?lesson.lab:undefined;if(lab==='recursion'||id==='recursion')cleanup=mountRecursion(document.querySelector('#lesson-lab')!);else if(lab)cleanup=mountPlayground(document.querySelector('#lesson-lab')!,lab);else if(lesson?.visualization)cleanup=mountLab(document.querySelector('#lesson-lab')!,lesson.visualization);
     document.querySelector('#lesson-notes')?.addEventListener('input',event=>{progress.notes[id]=(event.target as HTMLTextAreaElement).value;const saved=persist();document.querySelector('#notes-status')!.textContent=saved?'Apuntes guardados':'No se pudieron guardar. Copia tus apuntes antes de cerrar.';});
   }
   if(page==='exercises' && id && id!=='filter') {
@@ -221,7 +222,7 @@ app.addEventListener('click',async event=>{
   if(action==='hint'){const e=exercises.find(e=>e.id===id)!;exerciseHint=Math.min(exerciseHint+1,e.hints.length);document.querySelector('#hints')!.innerHTML=e.hints.slice(0,exerciseHint).map((h,i)=>`<p style="font-size:12px"><strong>Pista ${i+1}.</strong> ${esc(h)}</p>`).join('');target.textContent=`Ver pista (${exerciseHint}/${e.hints.length})`;if(exerciseHint===e.hints.length)target.setAttribute('disabled','');}
   if(action==='solution'){showSolution=!showSolution;const e=exercises.find(e=>e.id===id)!;document.querySelector('#solution')!.innerHTML=showSolution?solutionHtml(e):'';target.innerHTML=`${showSolution?'Ocultar':'Consultar'} la solución explicada ${icon('arrow')}`;}
   if(action==='attempt-code'){const e=exercises.find(e=>e.id===id)!;const code=(document.querySelector('#java-editor') as HTMLTextAreaElement).value;if(!code.trim()||code===e.starter){toast('Modifica el código para registrar tu propio intento.');return;}progress.drafts[id]=code;(progress.exerciseAttempts[id]??=[]).push({at:new Date().toISOString(),response:code,correct:null,manual:false});persist();attempted=true;render(true);toast('Intento guardado. Ya puedes consultar la solución.');}
-  if(action==='download-code'){const e=exercises.find(e=>e.id===id)!;const code=progress.drafts[id]||e.starter;const className=code.match(/\bclass\s+([A-Za-z_$][\w$]*)/);download(className?className[1]+'.java':'Solucion.java',className?code:'public class Solucion {\n'+code.split('\n').map(line=>'    '+line).join('\n')+'\n}\n','text/x-java-source');}
+  if(action==='download-code'){const e=exercises.find(e=>e.id===id)!;const file=javaDownload(progress.drafts[id]||e.starter);download(file.filename,file.source,'text/x-java-source');}
   if(action==='self-review'){(progress.exerciseAttempts[id]??=[]).push({at:new Date().toISOString(),response:progress.drafts[id]||'',correct:null,manual:true});persist();render(true);toast('Revisión personal registrada');}
   if(action==='quiz-start'){const moduleId=Number(target.dataset.module)||1;quiz={moduleId,active:true,index:0,answers:[],checked:false,finished:false,optionOrder:moduleQuestions(moduleId).map(q=>optionOrder(q.options.length))};render();}
   if(action==='quiz-next'){const bank=moduleQuestions(quiz.moduleId);if(quiz.index<bank.length-1){quiz.index++;quiz.checked=false;}else{progress.assessments.push(gradeAssessment(quiz.moduleId,questions,quiz.answers));persist();quiz.active=false;quiz.finished=true;}render();}

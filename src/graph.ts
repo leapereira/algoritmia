@@ -11,11 +11,14 @@ export function graphTrace(graph:Graph,algorithm:GraphAlgorithm,source:string,ta
  distances[source]=0;
  const push=(message:string,active:string[]=[],path:string[]=[])=>trace.push({message,active:[...active],visited:[...visited],distances:{...distances},selected:selected.map(e=>({...e})),path:[...path]});
  push(`Estado inicial. Origen: ${source}.`);
- if(algorithm==='bfs'||algorithm==='dfs'){
+ if(algorithm==='dfs'){
+  const seen=new Set<string>();
+  function visit(v:string){seen.add(v);visited.push(v);push(`Visitar ${v}; marco recursivo activo.`,[v]);for(const edge of adj.get(v)!)if(!seen.has(edge.to)){distances[edge.to]=distances[v]+1;previous[edge.to]=v;push(`Descubrir ${edge.to} desde ${v} y explorar su rama antes de continuar.`,[v,edge.to]);visit(edge.to);}}
+  visit(source);
+ }else if(algorithm==='bfs'){
   const pending=[source],seen=new Set([source]);
-  while(pending.length){const v=algorithm==='bfs'?pending.shift()!:pending.pop()!;visited.push(v);push(`Visitar ${v}. ${algorithm==='bfs'?'Cola FIFO':'Pila LIFO'}: ${pending.join(', ')||'vacía'}.`,[v]);
-   const neighbors=algorithm==='dfs'?[...adj.get(v)!].reverse():adj.get(v)!;
-   for(const edge of neighbors)if(!seen.has(edge.to)){seen.add(edge.to);pending.push(edge.to);distances[edge.to]=distances[v]+1;previous[edge.to]=v;push(`Descubrir ${edge.to} desde ${v}.`,[v,edge.to]);}
+  while(pending.length){const v=pending.shift()!;visited.push(v);push(`Visitar ${v}. Cola FIFO: ${pending.join(', ')||'vacía'}.`,[v]);
+   for(const edge of adj.get(v)!)if(!seen.has(edge.to)){seen.add(edge.to);pending.push(edge.to);distances[edge.to]=distances[v]+1;previous[edge.to]=v;push(`Descubrir ${edge.to} desde ${v}.`,[v,edge.to]);}
   }
  }else if(algorithm==='dijkstra'){
   if(graph.edges.some(e=>e.weight<0))throw new Error('Dijkstra requiere pesos no negativos. Usa Bellman-Ford para pesos negativos.');

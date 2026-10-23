@@ -5,8 +5,8 @@ export type Lesson = {
   complexity: { time: string; space: string; explanation: string };
   pitfalls: string[]; solved: { title: string; explanation: string; code: string };
   practice: { title: string; prompt: string }; takeaways: string[];
-  visualization?: 'max' | 'reverse' | 'duplicates' | 'linear' | 'binary' | 'bubble';
-  lab?: 'recursion' | 'complexity' | 'linked-list' | 'stack' | 'queue' | 'bst' | 'avl' | 'heap' | 'hash' | 'trie' | 'graph' | 'greedy' | 'dp' | 'backtracking' | 'advanced' | 'design';
+  visualization?: 'max' | 'reverse' | 'duplicates' | 'linear' | 'binary' | 'bubble' | 'selection' | 'insertion' | 'merge' | 'quick' | 'heap' | 'counting' | 'radix';
+  lab?: 'recursion' | 'complexity' | 'linked-list' | 'stack' | 'queue' | 'bst' | 'avl' | 'heap' | 'hash' | 'trie' | 'graph' | 'greedy' | 'dp' | 'backtracking' | 'advanced' | 'design' | 'range';
 };
 export type Exercise = {
   id: string; moduleId?: number; title: string; kind: 'prediction' | 'complexity' | 'debug' | 'implementation';
