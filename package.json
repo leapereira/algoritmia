@@ -1,0 +1,19 @@
+{
+  "name": "algoritmia",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Aula interactiva de algoritmos y estructuras de datos en Java",
+  "scripts": {
+    "build": "node build.mjs",
+    "dev": "node server.mjs",
+    "test": "node --experimental-strip-types --test tests/*.test.mjs",
+    "typecheck": "tsc --noEmit"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "devDependencies": {
+    "typescript": "^7.0.2"
+  }
+}

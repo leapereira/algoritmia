@@ -1,0 +1,413 @@
+import { blocks, modules, exercises, questions, glossary } from './data/curriculum.js';
+import { lessons } from './data/lessons.js';
+import { loadProgress, saveProgress } from './storage.js';
+import { checkExerciseAnswer } from './answers.js';
+import { mountLab } from './lab.js';
+import { mountRecursion } from './recursion.js';
+const app = document.querySelector('#app');
+const progress = loadProgress(questions);
+const paths = {
+    home: 'M3 10 12 3l9 7v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1Z',
+    grid: 'M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h7v7h-7z',
+    book: 'M3 4h6a4 4 0 0 1 3 1 4 4 0 0 1 3-1h6v16h-6a4 4 0 0 0-3 1 4 4 0 0 0-3-1H3ZM12 5v16',
+    flask: 'M9 3h6M10 3v6l-6 10a1.5 1.5 0 0 0 1.3 2h13.4a1.5 1.5 0 0 0 1.3-2L14 9V3M8 14h8',
+    code: 'm8 6-6 6 6 6m8-12 6 6-6 6M14 3l-4 18',
+    check: 'm5 12 4 4L19 6',
+    clipboard: 'M9 4H5v17h14V4h-4M9 2h6v5H9zM8 12h8M8 16h5',
+    chart: 'M3 3v18h18M7 16l4-5 4 2 5-8',
+    search: 'M21 21l-5-5M18 10a8 8 0 1 1-16 0 8 8 0 0 1 16 0',
+    arrow: 'M4 12h16m-6-6 6 6-6 6',
+    back: 'M20 12H4m6-6-6 6 6 6',
+    clock: 'M12 8v5l3 2M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0',
+    moon: 'M21 13A9 9 0 0 1 11 3a9 9 0 1 0 10 10Z',
+    sun: 'M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5M18 18l1 1M5 19l1.5-1.5M18 6l1-1M16 12a4 4 0 1 1-8 0 4 4 0 0 1 8 0',
+    layers: 'm12 3 10 5-10 5L2 8Zm-10 9 10 5 10-5M2 16l10 5 10-5',
+    tree: 'M12 3v6M5 16v-5h14v5M9 2h6v5H9zM2 16h6v5H2zM16 16h6v5h-6z',
+    network: 'M6 5l12 3M5 7l4 10M18 10l-7 8M8 4a3 3 0 1 1-6 0 3 3 0 0 1 6 0M22 8a3 3 0 1 1-6 0 3 3 0 0 1 6 0M12 20a3 3 0 1 1-6 0 3 3 0 0 1 6 0',
+    bookmark: 'M6 3h12v18l-6-4-6 4Z',
+    download: 'M12 3v12m-5-5 5 5 5-5M4 16v5h16v-5',
+    print: 'M6 8V3h12v5M6 17H3v-7h18v7h-3M6 14h12v7H6zM17 11h1',
+    close: 'm5 5 14 14M19 5 5 19',
+    menu: 'M4 6h16M4 12h16M4 18h16',
+    leaf: 'M20 3c-12-2-18 7-12 13s15 0 12-13ZM5 21l10-10',
+    lock: 'M6 10h12v11H6zM8 10V6a4 4 0 0 1 8 0v4',
+    target: 'M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0M17 12a5 5 0 1 1-10 0 5 5 0 0 1 10 0M12 12h.01',
+};
+const icon = (name, cls = '') => `<svg class="icon ${cls}" viewBox="0 0 24 24" aria-hidden="true"><path d="${paths[name] || paths.book}"/></svg>`;
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const pad = (n) => String(n).padStart(2, '0');
+const roman = ['I', 'II', 'III', 'IV'];
+const completed = () => lessons.filter(l => progress.completed.includes(l.id)).length;
+const lessonPercent = () => Math.round(completed() / lessons.length * 100);
+const passed = () => progress.assessments.some(a => a.score >= 70);
+const moduleComplete = () => completed() === lessons.length && passed();
+const solved = () => exercises.filter(e => progress.exerciseAttempts[e.id]?.some(a => a.correct === true || a.manual)).length;
+const coursePercent = () => Math.round((completed() / lessons.length + (passed() ? 1 : 0)) / (modules.length * 2) * 100);
+let cleanup;
+let toastTimer;
+let route = '';
+let exerciseHint = 0;
+let attempted = false;
+let showSolution = false;
+let quiz = { active: false, index: 0, answers: [], checked: false, finished: false };
+try {
+    document.documentElement.dataset.theme = localStorage.getItem('algoritmia.theme') || 'light';
+}
+catch { /* Default theme. */ }
+function toast(message) {
+    const el = document.querySelector('#toast');
+    el.textContent = message;
+    el.classList.add('visible');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => el.classList.remove('visible'), 3300);
+}
+function persist() { const saved = saveProgress(progress); if (!saved)
+    toast('No se pudo guardar. Revisa el almacenamiento del navegador.'); return saved; }
+function navigate(hash) { if (location.hash === hash)
+    render();
+else
+    location.hash = hash; }
+function nextLesson() { return lessons.find(l => !progress.completed.includes(l.id)) || lessons[0]; }
+function resumeLesson() { return lessons.find(l => l.id === progress.lastLesson) || nextLesson(); }
+function formatTime(seconds) { const m = Math.floor(seconds / 60); return m < 60 ? `${m} min` : `${Math.floor(m / 60)} h ${m % 60} min`; }
+function date(at) { const d = new Date(at); return Number.isNaN(d.getTime()) ? 'Fecha no disponible' : d.toLocaleString('es-UY', { dateStyle: 'medium', timeStyle: 'short' }); }
+function codeBlock(code, language = 'java') {
+    const re = /(\/\/[^\n]*|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|\b(?:public|private|protected|static|void|int|long|boolean|double|char|class|return|if|else|for|while|do|new|throw|throws|true|false|null|final|import|break|continue)\b|\b\d+\b)/g;
+    let result = '', start = 0;
+    for (const match of code.matchAll(re)) {
+        result += esc(code.slice(start, match.index));
+        const token = match[0];
+        const type = token.startsWith('//') ? 'comment' : /^["']/.test(token) ? 'string' : /^\d/.test(token) ? 'number' : 'keyword';
+        result += `<span class="syntax-${type}">${esc(token)}</span>`;
+        start = match.index + token.length;
+    }
+    result += esc(code.slice(start));
+    return `<div class="code-block"><div class="code-head"><span>${esc(language === 'java' ? 'Java' : 'Pseudocódigo')}</span><button type="button" data-copy>COPIAR</button></div><pre><code>${result}</code></pre></div>`;
+}
+function pageHeading(title, subtitle, action = '') { return `<div class="page-heading"><div><h1>${title}</h1><p>${subtitle}</p></div>${action}</div>`; }
+function stat(name, value, detail, symbol) { return `<div class="stat-card"><div class="stat-icon">${icon(symbol)}</div><div><div class="stat-label">${name}</div><div class="stat-value">${value}</div><div class="stat-foot">${detail}</div></div></div>`; }
+function footer() { return `<footer class="footer"><span>${icon('leaf')} Aprender a tu ritmo también es avanzar.</span><span>Hecho para mentes curiosas · Java</span></footer>`; }
+function navLink(name, title, symbol, extra = '') { return `<a class="nav-link ${route.startsWith(name) ? 'active' : ''}" href="#${name}" ${route.startsWith(name) ? 'aria-current="page"' : ''}>${icon(symbol)}<span>${title}</span>${extra}</a>`; }
+function shell(body, title) {
+    const currentModule = route.startsWith('module/') ? Number(route.split('/')[1]) : route.startsWith('lesson/') ? 1 : 0;
+    return `<div class="layout"><aside class="sidebar" aria-label="Navegación principal"><a class="brand" href="#dashboard" aria-label="Algoritmia, inicio"><span class="brand-mark"><svg viewBox="0 0 32 32" fill="none"><path d="m5 27 11-22 11 22M10 19h12" stroke="currentColor" stroke-width="2.3" stroke-linecap="round"/><circle cx="16" cy="5" r="2.5" fill="currentColor"/></svg></span>algoritmia<span class="brand-dot">.</span></a><div class="sidebar-scroll"><div class="nav-title">TU ESPACIO DE APRENDIZAJE</div><nav>${navLink('dashboard', 'Mi dashboard', 'grid')}${navLink('course', 'Ruta del curso', 'book', '<span class="nav-count">16</span>')}${navLink('lab', 'Laboratorio', 'flask')}${navLink('exercises', 'Ejercicios', 'code')}${navLink('assessment', 'Evaluaciones', 'clipboard')}${navLink('progress', 'Mi progreso', 'chart')}${navLink('tools', 'Herramientas', 'layers')}</nav><div class="course-tree"><div class="nav-title">CONTENIDO DEL CURSO</div>${blocks.map(b => `<details ${b.id === 1 || modules.find(m => m.id === currentModule)?.blockId === b.id ? 'open' : ''}><summary><i class="block-dot" style="background:${b.color}"></i>Bloque ${roman[b.id - 1]} <span class="muted">· ${b.id === 1 ? 'Fundamentos' : b.id === 2 ? 'Estructuras' : b.id === 3 ? 'Algoritmos' : 'Avanzado'}</span><span class="chev">›</span></summary>${modules.filter(m => m.blockId === b.id).map(m => `<a class="tree-module ${currentModule === m.id ? 'current' : ''}" href="#module/${m.id}"><span>${pad(m.id)}</span><span>${esc(m.title)}</span>${m.available ? '' : icon('lock')}</a>`).join('')}</details>`).join('')}</div></div><div class="sidebar-bottom"><button class="theme-toggle" data-action="theme">${icon(document.documentElement.dataset.theme === 'dark' ? 'sun' : 'moon')}<span>${document.documentElement.dataset.theme === 'dark' ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}</span></button><div class="local-label"><i></i> Tu progreso se guarda en este navegador</div></div></aside><div class="mobile-overlay" data-action="close-menu"></div><div class="main-column"><header class="topbar"><button class="icon-btn mobile-menu" data-action="menu" aria-label="Abrir navegación">${icon('menu')}</button><div class="breadcrumb"><a href="#dashboard" aria-label="Inicio">${icon('home')}</a><span>/</span><strong>${esc(title)}</strong></div><div class="top-actions"><button class="search-trigger" data-action="search" aria-label="Buscar conceptos y lecciones">${icon('search')}<span>Buscar en el curso</span><kbd>⌘ K</kbd></button><div class="profile"><span class="avatar">TÚ</span><span>Tu espacio<small>Estudiante de Java</small></span></div></div></header><main class="content" id="main" tabindex="-1">${body}${footer()}</main></div></div>`;
+}
+function heroArt() { return `<div class="hero-art" aria-hidden="true"><svg viewBox="0 0 380 260"><defs><pattern id="grid" width="28" height="28" patternUnits="userSpaceOnUse"><path d="M28 0H0V28" fill="none" stroke="#a8d49c" stroke-opacity=".08"/></pattern></defs><rect width="380" height="260" fill="url(#grid)"/><g stroke="#84a980" stroke-width="1.2" fill="none"><path d="M188 68 113 122M188 68l77 54M113 122l-43 61M113 122l43 61M265 122l-43 61M265 122l43 61"/></g><g fill="#1d4c3f" stroke="#6b916b" stroke-width="1"><circle cx="188" cy="68" r="20"/><circle cx="113" cy="122" r="18"/><circle cx="265" cy="122" r="18"/><circle cx="70" cy="183" r="16"/><circle cx="156" cy="183" r="16"/><circle cx="222" cy="183" r="16"/><circle cx="308" cy="183" r="16"/></g><circle cx="188" cy="68" r="20" fill="#d4e6a3"/><g fill="#c4d8bc" font-family="monospace" font-size="12" text-anchor="middle"><text x="188" y="72" fill="#24452d">24</text><text x="113" y="126">12</text><text x="265" y="126">36</text><text x="70" y="187">6</text><text x="156" y="187">18</text><text x="222" y="187">30</text><text x="308" y="187">42</text></g><g class="art-label"><text x="272" y="61">O(log n)</text><text x="72" y="229">ideas → estructuras → soluciones</text><text x="41" y="83">{ }</text></g><circle cx="333" cy="54" r="3" fill="#86a677"/><circle cx="42" cy="140" r="2" fill="#86a677"/><path d="M338 205h10m-5-5v10" stroke="#7a9870"/></svg></div>`; }
+function dashboard() {
+    const last = resumeLesson();
+    const current = nextLesson();
+    return pageHeading('Un buen día para aprender.', 'Cada concepto es una nueva forma de resolver el mundo.', '<span class="heading-status"><i></i> A tu ritmo, paso a paso</span>') +
+        `<section class="hero"><div class="hero-copy"><div class="eyebrow"><span class="tiny-tag">APRENDE · PRACTICA · COMPRENDE</span></div><h2>Las grandes soluciones<br>empiezan con <span>una idea.</span></h2><p>Comprende los algoritmos desde adentro.<br>Explora, experimenta y construye con Java.</p><a class="btn btn-lime" href="#lesson/${last.id}">${completed() || progress.studySeconds > 30 ? 'Continuar aprendiendo' : 'Comenzar mi recorrido'}${icon('arrow')}</a><span class="hero-meta">4 bloques · 16 módulos · Tu ritmo</span></div>${heroArt()}</section>` +
+        `<div class="stats-grid">${stat('Lecciones completadas', `${completed()} <small>/ ${lessons.length} disponibles</small>`, completed() ? 'Sigue construyendo conocimiento' : 'Todo empieza con el primer paso', 'book')}${stat('Tiempo de estudio', formatTime(progress.studySeconds), 'Tiempo de actividad en la plataforma', 'clock')}${stat('Ejercicios resueltos', `${solved()} <small>/ ${exercises.length}</small>`, 'La práctica convierte ideas en habilidad', 'code')}${stat('Módulos completados', `${moduleComplete() ? 1 : 0} <small>/ 16</small>`, 'Un módulo desarrollado en esta edición', 'layers')}</div>` +
+        `<div class="dashboard-grid"><div><div class="section-heading"><h2>Tu ruta de aprendizaje</h2><a class="text-link" href="#course">Ver programa completo ${icon('arrow')}</a></div><div class="route-grid">${blocks.map((b, i) => `<a class="route-card" href="#course/${b.id}"><div class="route-card-top"><span class="route-icon ${['', 'blue', 'purple', 'orange'][i]}">${icon(['code', 'tree', 'network', 'layers'][i])}</span>${i === 0 ? '<span class="current-badge">EMPIEZA AQUÍ</span>' : '<span class="eyebrow">PROGRAMA</span>'}</div><div class="eyebrow">BLOQUE ${roman[i]}</div><h3 style="margin-top:7px">${esc(b.title)}</h3><p>${esc(['Las bases para pensar y resolver problemas.', 'La estructura correcta hace la diferencia.', 'Estrategias para encontrar mejores soluciones.', 'Lleva tus conocimientos un paso más allá.'][i])}</p><div class="route-card-bottom"><span>${modules.filter(m => m.blockId === b.id).length} módulos · ${i === 0 ? 'Nivel inicial' : i === 1 ? 'Nivel intermedio' : i === 2 ? 'Nivel intermedio' : 'Nivel avanzado'}</span>${icon('arrow')}</div></a>`).join('')}</div><div class="next-section"><div class="section-heading"><h2>${completed() ? 'Tu siguiente paso' : 'Tu primera lección'}</h2><span class="eyebrow">MÓDULO 01</span></div><div class="lesson-preview"><span class="lesson-number">${pad(lessons.indexOf(current) + 1)}</span><div><h3>${esc(current.title)}</h3><p>${current.duration} min de lectura · Teoría + práctica</p></div><a class="btn btn-secondary btn-small" href="#lesson/${current.id}"><span>Ir a la lección</span>${icon('arrow')}</a></div></div></div><aside class="dashboard-aside"><div class="side-card"><div class="progress-card-head"><h3>Un paso a la vez</h3>${icon('target')}</div><div class="progress-ring"><svg viewBox="0 0 120 120"><circle cx="60" cy="60" r="51" fill="none" stroke="var(--surface-alt)" stroke-width="7"/><circle cx="60" cy="60" r="51" fill="none" stroke="var(--accent)" stroke-width="7" stroke-linecap="round" stroke-dasharray="${lessonPercent() * 3.204} 320.44"/></svg><div class="ring-value">${lessonPercent()}%<small>del módulo 1</small></div></div><p class="progress-caption">${completed() ? `${completed()} de ${lessons.length} lecciones completadas.<br>Cada paso cuenta.` : 'Tu viaje empieza hoy.<br>Lo importante es dar el primer paso.'}</p><div class="progress-legend"><span><i></i>${completed()} completadas</span><span><i></i>${lessons.length - completed()} pendientes</span></div></div><div class="lab-teaser"><div class="eyebrow">APRENDE HACIENDO</div><h3>Las ideas cobran vida.</h3><p>Observa cada paso y descubre cómo funciona.</p><div class="mini-bars" aria-hidden="true"><i style="height:22px"></i><i style="height:43px"></i><i style="height:32px"></i><i style="height:55px"></i></div><a class="text-link" href="#lab">Abrir laboratorio ${icon('arrow')}</a></div></aside></div>`;
+}
+function coursePage(blockId) {
+    return pageHeading('Un mapa para llegar más lejos.', 'Cuatro bloques. Dieciséis módulos. Una base sólida para resolver problemas.') +
+        `<div class="notice">Primera edición: el módulo 1 está desarrollado con lecciones, laboratorio, ejercicios y evaluación. Los módulos 2–16 conservan el programa completo y sus prácticas; su contenido está en preparación.</div><div class="toolbar"><a class="btn ${!blockId ? 'btn-primary' : 'btn-secondary'} btn-small" href="#course">Todo el programa</a>${blocks.map(b => `<a class="btn ${blockId === b.id ? 'btn-primary' : 'btn-secondary'} btn-small" href="#course/${b.id}">Bloque ${roman[b.id - 1]}</a>`).join('')}</div>${blocks.filter(b => !blockId || b.id === blockId).map(b => `<section><div class="block-header"><i class="block-dot" style="background:${b.color}"></i><h2>${roman[b.id - 1]}. ${esc(b.title)}</h2><small>${modules.filter(m => m.blockId === b.id).length} módulos</small></div>${modules.filter(m => m.blockId === b.id).map(m => `<a class="module-card" href="#module/${m.id}"><span class="module-index">${pad(m.id)}</span><div><h3>${esc(m.title)}</h3><p>${m.available ? `${lessons.length} lecciones · ${exercises.length} ejercicios · Evaluación final` : `${m.topics.length} temas · Consulta el programa y la práctica`}</p></div><span class="chip ${m.available ? '' : 'neutral'}">${m.available ? 'Disponible' : 'En preparación'} ${icon(m.available ? 'arrow' : 'lock')}</span></a>`).join('')}</section>`).join('')}`;
+}
+function modulePage(id) {
+    const m = modules.find(m => m.id === id);
+    if (!m)
+        return notFound();
+    return `<a class="text-link" href="#course/${m.blockId}" style="margin-bottom:22px">${icon('back')} Bloque ${roman[m.blockId - 1]}</a>` + pageHeading(`${pad(m.id)}. ${esc(m.title)}`, m.available ? 'De una idea a una solución que puedes explicar y demostrar.' : 'El programa de este módulo está definido. Las lecciones están en preparación.') +
+        (m.available ? `<div class="panel"><div class="section-heading"><h2>Tu avance en este módulo</h2><span class="chip">${completed()} / ${lessons.length} lecciones</span></div><div class="progress-track" style="margin-bottom:0"><span style="width:${lessonPercent()}%"></span></div></div>${lessons.map((l, i) => `<a class="module-card" href="#lesson/${l.id}"><span class="lesson-number">${progress.completed.includes(l.id) ? icon('check') : pad(i + 1)}</span><div><h3>${esc(l.title)}</h3><p>${esc(l.summary)}</p></div><span class="chip neutral">${l.duration} min ${icon('arrow')}</span></a>`).join('')}<div class="toolbar" style="margin-top:22px"><a class="btn btn-primary" href="#exercises">Practicar ${icon('code')}</a><a class="btn btn-secondary" href="#assessment">Evaluación final ${icon('clipboard')}</a></div>` : `<div class="notice warning">Contenido en preparación. Puedes consultar todos los temas y la práctica prevista. Este módulo aún no tiene lecciones ni evaluación y no se puede marcar como completado.</div><div class="panel"><h2>Temas del módulo</h2><ol class="topic-list">${m.topics.map(t => `<li>${esc(t)}</li>`).join('')}</ol></div>`) + `<div class="panel"><span class="eyebrow">DEL CONCEPTO A LA PRÁCTICA</span><h2 style="margin-top:12px">Práctica del módulo</h2><p>${esc(m.practice.charAt(0).toUpperCase() + m.practice.slice(1))}</p></div>`;
+}
+function lessonPage(id) {
+    const lesson = lessons.find(l => l.id === id);
+    if (!lesson)
+        return notFound();
+    progress.lastLesson = id;
+    persist();
+    const index = lessons.indexOf(lesson), done = progress.completed.includes(id);
+    return `<a class="text-link" href="#module/1" style="margin-bottom:24px">${icon('back')} Módulo 01 · Introducción a los algoritmos</a><div class="lesson-layout"><article class="lesson-content"><div class="eyebrow">LECCIÓN ${pad(index + 1)} DE ${pad(lessons.length)}</div><h1 style="margin-top:12px">${esc(lesson.title)}</h1><p class="lead">${esc(lesson.summary)}</p><div class="lesson-meta"><span>${icon('clock')} ${lesson.duration} min de lectura</span><span>${icon('code')} Java</span><span>${icon(done ? 'check' : 'book')} ${done ? 'Completada' : 'A tu ritmo'}</span></div><div class="toolbar mobile-lesson-actions"><button class="btn btn-secondary btn-small" data-action="bookmark" data-id="${id}">${icon('bookmark')}${progress.bookmarks.includes(id) ? 'Guardada' : 'Guardar lección'}</button><button class="btn btn-secondary btn-small" data-action="print">${icon('print')} Imprimir lección</button></div><div class="objectives"><h3>${icon('target')} Lo que podrás hacer</h3><ul>${lesson.objectives.map(o => `<li>${esc(o)}</li>`).join('')}</ul></div><section><h2>Antes de empezar</h2><ul>${lesson.prerequisites.map(p => `<li>${esc(p)}</li>`).join('')}</ul></section>${lesson.sections.map((s, i) => `<section id="section-${i}"><h2>${esc(s.title)}</h2>${s.paragraphs.map(p => `<p>${esc(p)}</p>`).join('')}${s.bullets ? `<ul>${s.bullets.map(p => `<li>${esc(p)}</li>`).join('')}</ul>` : ''}${s.code ? codeBlock(s.code, s.language) : ''}</section>`).join('')}${id === 'pseudocodigo' ? `<section><h2>Un recorrido visual del ciclo</h2><div class="flow-diagram" role="img" aria-label="Inicio, inicializar índices, mientras izquierda sea menor que derecha intercambiar y acercar índices, volver a la condición; si no se cumple, fin"><span class="flow-node terminal">Inicio</span><span class="flow-arrow">→</span><span class="flow-node">Inicializar índices</span><span class="flow-arrow">→</span><span class="flow-node decision">¿izq &lt; der?</span><span class="flow-arrow">sí →</span><span class="flow-node">Intercambiar y acercar</span><span class="flow-arrow">↶ condición</span><span class="flow-node terminal">no → Fin</span></div><p>La decisión se evalúa antes de cada vuelta. La flecha de retorno vuelve a la condición después de actualizar los índices; la rama «no» termina el algoritmo.</p></section>` : ''}${lesson.visualization ? '<section><h2>Ahora, observa cada paso</h2><p>Cambia los datos y sigue el estado del algoritmo. La visualización ejecuta su lógica en el navegador.</p><div id="lesson-lab"></div></section>' : ''}<section><h2>¿Cuánto cuesta esta solución?</h2><div class="complexity-grid"><div class="complexity-cell"><small>TIEMPO</small><strong>${esc(lesson.complexity.time)}</strong></div><div class="complexity-cell"><small>ESPACIO AUXILIAR</small><strong>${esc(lesson.complexity.space)}</strong></div></div><p style="margin-top:17px">${esc(lesson.complexity.explanation)}</p></section><section><h2>Casos especiales y errores frecuentes</h2><ul>${lesson.pitfalls.map(p => `<li>${esc(p)}</li>`).join('')}</ul></section><section><h2>Ejercicio resuelto · ${esc(lesson.solved.title)}</h2><p>${esc(lesson.solved.explanation)}</p>${codeBlock(lesson.solved.code)}</section><section><div class="panel"><span class="eyebrow">TU TURNO</span><h3 style="margin-top:12px">${esc(lesson.practice.title)}</h3><p>${esc(lesson.practice.prompt)}</p><a href="#exercises" class="btn btn-secondary">Ir a los ejercicios ${icon('arrow')}</a></div></section><section><h2>Qué te llevas de esta lección</h2><ul>${lesson.takeaways.map(p => `<li>${esc(p)}</li>`).join('')}</ul></section><section class="panel"><label class="notes-label" for="lesson-notes">Tus apuntes personales</label><p style="font-size:11px">Anota dudas, ejemplos o ideas. Se guardan automáticamente en este navegador.</p><textarea id="lesson-notes" class="notes-area" placeholder="¿Qué idea quieres recordar?">${esc(progress.notes[id] || '')}</textarea><span id="notes-status" class="muted" role="status" style="display:block;font-size:10px;margin-top:8px">${progress.notes[id] ? 'Apuntes guardados' : 'Solo tú tienes acceso en este navegador'}</span></section><div class="lesson-bottom">${index ? `<a class="btn btn-secondary" href="#lesson/${lessons[index - 1].id}">${icon('back')} Anterior</a>` : ''}<button class="btn ${done ? 'btn-secondary' : 'btn-primary'}" data-action="complete" data-id="${id}">${icon('check')}${done ? 'Marcar como pendiente' : 'Marcar como completada'}</button><a class="btn btn-secondary" href="${index < lessons.length - 1 ? `#lesson/${lessons[index + 1].id}` : '#assessment'}">${index < lessons.length - 1 ? 'Siguiente lección' : 'Ir a la evaluación'} ${icon('arrow')}</a></div></article><aside class="lesson-aside"><h3>EN ESTE MÓDULO</h3>${lessons.map((l, i) => `<a href="#lesson/${l.id}" class="${l.id === id ? 'active' : ''} ${progress.completed.includes(l.id) ? 'done' : ''}"><span class="lesson-dot">${progress.completed.includes(l.id) ? '✓' : i + 1}</span>${esc(l.title)}</a>`).join('')}<div class="aside-actions"><button class="btn btn-secondary btn-small" data-action="bookmark" data-id="${id}">${icon('bookmark')}${progress.bookmarks.includes(id) ? 'Guardado en marcadores' : 'Guardar lección'}</button><button class="btn btn-secondary btn-small" data-action="print">${icon('print')} Imprimir lección</button><a class="text-link" href="#tools">Consultar el glosario ${icon('arrow')}</a></div></aside></div>`;
+}
+const kinds = { prediction: 'Predicción', debug: 'Encuentra el error', implementation: 'Implementación Java', complexity: 'Complejidad' };
+function exerciseList(filter = 'all') {
+    return pageHeading('La idea se entiende practicando.', 'Seis desafíos para comprobar lo que aprendiste en el módulo 1.') + `<div class="toolbar"><a class="btn btn-small ${filter === 'all' ? 'btn-primary' : 'btn-secondary'}" href="#exercises">Todos</a>${Object.entries(kinds).map(([k, v]) => `<a class="btn btn-small ${filter === k ? 'btn-primary' : 'btn-secondary'}" href="#exercises/filter/${k}">${v}</a>`).join('')}</div><div class="exercise-grid">${exercises.filter(e => filter === 'all' || e.kind === filter).map((e, i) => { const attempts = progress.exerciseAttempts[e.id] || [], isSolved = attempts.some(a => a.correct || a.manual); return `<a class="exercise-card" href="#exercises/${e.id}"><div class="section-heading"><span class="chip neutral">${e.difficulty}</span>${isSolved ? `<span class="chip">${icon('check')} ${e.kind === 'implementation' ? 'Revisado por ti' : 'Resuelto'}</span>` : `<span class="eyebrow">${kinds[e.kind]}</span>`}</div><h3>${esc(e.title)}</h3><p>${esc(e.prompt.slice(0, 155))}${e.prompt.length > 155 ? '…' : ''}</p><div class="exercise-card-foot"><span>${attempts.length ? `${attempts.length} intentos guardados` : 'Aún por explorar'}</span>${icon('arrow')}</div></a>`; }).join('')}</div>`;
+}
+function exercisePage(id) {
+    const e = exercises.find(e => e.id === id);
+    if (!e)
+        return notFound();
+    const previous = progress.exerciseAttempts[id] || [];
+    attempted = previous.length > 0;
+    return `<a class="text-link" href="#exercises" style="margin-bottom:22px">${icon('back')} Banco de ejercicios</a>` + pageHeading(esc(e.title), `Módulo 01 · ${kinds[e.kind]} · ${e.difficulty}`) + `<div class="panel"><h2>El desafío</h2><p>${esc(e.prompt)}</p><div class="complexity-grid"><div><h3>Entrada de ejemplo</h3><p><code>${esc(e.input)}</code></p></div><div><h3>Formato de respuesta</h3><p>${esc(e.expected)}</p></div></div><h3>Condiciones</h3><ul style="color:var(--muted);font-size:12px;line-height:1.9">${e.constraints.map(c => `<li>${esc(c)}</li>`).join('')}</ul><a class="text-link" href="#lesson/${e.lessonId}">Repasar la lección ${icon('arrow')}</a></div><div class="panel exercise-form">${e.kind === 'implementation' ? `<h2>Tu implementación</h2><div class="notice warning">Ejecución de Java no configurada. Este editor guarda tu código y permite revisarlo; no lo compila ni ejecuta. Prueba los casos en tu IDE y registra después tu revisión.</div><label for="java-editor">Código Java · borrador guardado automáticamente</label><textarea id="java-editor" class="editor" spellcheck="false" autocapitalize="off" autocomplete="off">${esc(progress.drafts[id] || e.starter)}</textarea><span id="draft-status" role="status" class="muted" style="font-size:10px;display:block;margin-top:8px">${progress.drafts[id] ? 'Borrador guardado' : 'Escribe para guardar tu borrador'}</span><details class="editor-preview"><summary>Ver el código con resaltado de sintaxis</summary><div id="highlight-preview">${codeBlock(progress.drafts[id] || e.starter)}</div></details><div class="toolbar"><button class="btn btn-primary" data-action="attempt-code" data-id="${id}">Registrar mi intento ${icon('check')}</button><button class="btn btn-secondary" data-action="download-code" data-id="${id}">${icon('download')} Descargar .java</button><button class="btn btn-secondary" disabled title="Requiere un entorno Java aislado configurado">Ejecutar · No disponible</button></div>` : `<h2>Traza el algoritmo</h2>${codeBlock(e.starter, e.id === 'invertir-pseudocodigo' ? 'text' : 'java')}<form id="answer-form" data-id="${id}"><label for="exercise-answer">Tu respuesta</label><input id="exercise-answer" class="input" required maxlength="250" autocomplete="off" value="${esc(previous.at(-1)?.response || '')}" placeholder="Escribe tu respuesta…"><button class="btn btn-primary" style="margin-top:15px" type="submit">Comprobar respuesta ${icon('arrow')}</button></form>`}<div id="exercise-feedback" aria-live="polite"></div></div><div class="panel"><div class="section-heading"><h2>Una ayuda cuando la necesites</h2><button class="btn btn-secondary btn-small" data-action="hint" data-id="${id}">Ver pista (${exerciseHint}/${e.hints.length})</button></div><div id="hints">${e.hints.slice(0, exerciseHint).map((h, i) => `<p style="font-size:12px"><strong>Pista ${i + 1}.</strong> ${esc(h)}</p>`).join('')}</div><button class="btn btn-plain" data-action="solution" data-id="${id}" ${attempted ? '' : 'disabled'}>${showSolution ? 'Ocultar' : 'Consultar'} la solución explicada ${icon('arrow')}</button>${attempted ? '' : '<p class="muted" style="font-size:10px">La solución se habilita después de registrar un intento.</p>'}<div id="solution">${showSolution ? solutionHtml(e) : ''}</div></div>${previous.length ? `<div class="panel"><h2>Tus intentos anteriores</h2><ul class="history-list">${previous.slice(-5).reverse().map(a => `<li><span>${esc(date(a.at))}</span><span>${a.manual ? 'Revisión personal' : a.correct === null ? 'Intento de código registrado' : a.correct ? 'Correcto' : 'Para repasar'}</span></li>`).join('')}</ul></div>` : ''}`;
+}
+function solutionHtml(e) { return `<div class="notice">${e.kind === 'implementation' ? codeBlock(e.solution) : `<p style="white-space:pre-line">${esc(e.solution)}</p>`}<p>${esc(e.explanation)}</p>${e.kind === 'implementation' ? `<button class="btn btn-secondary" data-action="self-review" data-id="${e.id}">${icon('check')} Confirmo que lo revisé en mi IDE</button><p class="muted" style="font-size:10px;margin-top:10px">Se registrará como revisión personal, sin validación automática.</p>` : ''}</div>`; }
+function assessmentPage() {
+    if (!quiz.active && !quiz.finished)
+        return pageHeading('Comprender es poder explicarlo.', 'Evaluación del módulo 1 · Introducción a los algoritmos') + `<div class="assessment"><div class="panel"><span class="chip">12 preguntas · Sin límite de tiempo</span><h2 style="margin-top:23px">Pon a prueba tu razonamiento</h2><p>Trabajarás con conceptos, predicción de resultados, complejidades y orden de pasos. Cada respuesta incluye una explicación para ayudarte a comprender el porqué.</p><p>Alcanzas el objetivo con al menos un 70 %. Puedes repetir la evaluación; cada resultado y los temas a repasar se guardan en tu progreso.</p><div class="notice">${completed() === lessons.length ? 'Ya completaste las seis lecciones. Es un buen momento para comprobar lo aprendido.' : `Completaste ${completed()} de ${lessons.length} lecciones. Puedes evaluar tu punto de partida o terminar primero el módulo.`}</div><button class="btn btn-primary" data-action="quiz-start">Comenzar evaluación ${icon('arrow')}</button></div>${assessmentHistory()}</div>`;
+    if (quiz.finished) {
+        const attempt = progress.assessments.at(-1);
+        const weak = lessons.filter(l => attempt.mistakes.some(id => questions.find(q => q.id === id)?.lessonId === l.id));
+        return pageHeading('Cada respuesta te muestra un camino.', 'Resultado de tu evaluación · Módulo 01') + `<div class="assessment"><div class="panel"><span class="chip">${attempt.score >= 70 ? 'Objetivo alcanzado' : 'Sigue practicando'}</span><div class="result-score" style="margin-top:20px">${attempt.score}<small> / 100</small></div><p>${quiz.answers.filter((a, i) => a === questions[i].answer).length} de ${questions.length} respuestas correctas. ${attempt.score >= 70 ? 'Tienes una buena base para seguir aprendiendo.' : 'Revisa las explicaciones y vuelve a intentarlo cuando te sientas preparado.'}</p><div class="toolbar"><button class="btn btn-primary" data-action="quiz-start">Volver a intentarlo</button><a class="btn btn-secondary" href="#progress">Ver mi progreso ${icon('arrow')}</a></div></div>${weak.length ? `<div class="panel"><h2>Temas que conviene repasar</h2>${weak.map(l => `<a class="saved-item" href="#lesson/${l.id}">${esc(l.title)} ${icon('arrow')}</a>`).join('')}</div>` : ''}<div class="panel"><h2>Revisa tus respuestas</h2>${questions.map((q, i) => `<details style="padding:13px 0;border-bottom:1px solid var(--border)"><summary style="font-size:12px;line-height:1.8;cursor:pointer">${quiz.answers[i] === q.answer ? '✓' : '↻'} ${i + 1}. ${esc(q.prompt)}</summary><p style="font-size:12px;margin-top:14px">Tu respuesta: ${esc(q.options[quiz.answers[i]])}<br>Respuesta correcta: ${esc(q.options[q.answer])}</p><p style="font-size:12px;color:var(--muted)">${esc(q.explanation)}</p></details>`).join('')}</div>${assessmentHistory()}</div>`;
+    }
+    const q = questions[quiz.index];
+    return pageHeading('Un problema, un razonamiento.', 'Evaluación del módulo 1 · Tus respuestas se guardarán al finalizar.') + `<div class="assessment"><div class="panel"><div class="question-top"><span>Pregunta ${quiz.index + 1} de ${questions.length}</span><span>${{ choice: 'Conceptos', truefalse: 'Verdadero o falso', prediction: 'Predicción de resultados', complexity: 'Complejidad', order: 'Orden de pasos' }[q.type]}</span></div><div class="progress-track"><span style="width:${quiz.index / questions.length * 100}%"></span></div><h2 class="question-prompt">${esc(q.prompt)}</h2><form id="quiz-form">${q.options.map((o, i) => `<label class="option"><input type="radio" name="answer" value="${i}" ${quiz.answers[quiz.index] === i ? 'checked' : ''} ${quiz.checked ? 'disabled' : ''} required><span>${esc(o)}</span></label>`).join('')}<div aria-live="polite">${quiz.checked ? `<div class="feedback ${quiz.answers[quiz.index] === q.answer ? '' : 'incorrect'}"><h3>${quiz.answers[quiz.index] === q.answer ? 'Correcto. Bien razonado.' : 'Una oportunidad para aprender.'}</h3><p>${esc(q.explanation)}</p>${quiz.answers[quiz.index] === q.answer ? '' : `<p style="margin-top:10px"><strong>Respuesta correcta:</strong> ${esc(q.options[q.answer])}</p>`}</div>` : ''}</div><div class="assessment-actions"><span class="muted" style="font-size:10px">Aprender también es equivocarse.</span>${quiz.checked ? `<button class="btn btn-primary" type="button" data-action="quiz-next">${quiz.index === questions.length - 1 ? 'Ver resultado' : 'Siguiente pregunta'} ${icon('arrow')}</button>` : '<button class="btn btn-primary" type="submit">Comprobar respuesta</button>'}</div></form></div></div>`;
+}
+function assessmentHistory() { return progress.assessments.length ? `<div class="panel"><h2>Historial de evaluaciones</h2><ul class="history-list">${progress.assessments.slice(-10).reverse().map(a => `<li><span>${esc(date(a.at))}<small style="display:block;color:var(--muted);margin-top:5px">${a.mistakes.length} respuestas para repasar</small></span><strong>${a.score} / 100</strong></li>`).join('')}</ul></div>` : ''; }
+function progressPage() {
+    const latest = progress.assessments.at(-1);
+    const weak = latest ? lessons.filter(l => latest.mistakes.some(id => questions.find(q => q.id === id)?.lessonId === l.id)) : [];
+    return pageHeading('Tu esfuerzo, hecho visible.', 'Un registro de lo que aprendiste y de lo que quieres seguir explorando.', `<button class="btn btn-secondary" data-action="export">${icon('download')} Exportar progreso</button>`) + `<div class="stats-grid">${stat('Lecciones del módulo 1', `${lessonPercent()}<small> %</small>`, `${completed()} de ${lessons.length} lecciones`, 'book')}${stat('Tiempo de estudio', formatTime(progress.studySeconds), 'Solo cuenta sesiones activas', 'clock')}${stat('Ejercicios resueltos', String(solved()), 'Incluye revisiones personales de código', 'code')}${stat('Mejor evaluación', progress.assessments.length ? `${Math.max(...progress.assessments.map(a => a.score))}<small> / 100</small>` : '—', `${progress.assessments.length} evaluaciones realizadas`, 'clipboard')}</div><div class="notice">El avance global se calcula sobre 16 módulos, con igual peso para las lecciones y la evaluación de cada módulo. Tu avance es ${coursePercent()} %. El módulo 1 queda completo al terminar sus seis lecciones y alcanzar un 70 % en la evaluación. Los otros 15 módulos aún no están desarrollados.</div><div class="progress-overview"><div class="panel"><h2>Avance por bloque</h2>${blocks.map(b => { const n = modules.filter(m => m.blockId === b.id).length; const pct = b.id === 1 ? Math.round((completed() / lessons.length + (passed() ? 1 : 0)) / (n * 2) * 100) : 0; return `<div class="progress-module"><div class="progress-module-head"><span>Bloque ${roman[b.id - 1]}</span><strong>${pct}%</strong></div><div class="progress-track"><span style="width:${pct}%"></span></div></div>`; }).join('')}<a class="text-link" href="#module/1">Continuar el módulo 1 ${icon('arrow')}</a></div><div class="panel"><h2>Modo de repaso</h2>${weak.length ? weak.map(l => `<a class="saved-item" href="#lesson/${l.id}">${esc(l.title)} ${icon('arrow')}</a>`).join('') : `<p class="muted" style="font-size:12px">${latest ? 'Tu última evaluación no tiene respuestas incorrectas. Puedes volver a practicar.' : 'Completa una evaluación para identificar los temas que conviene repasar.'}</p>`}<a href="#assessment" class="btn btn-secondary btn-small" style="margin-top:15px">${latest ? 'Repetir evaluación' : 'Evaluar mi comprensión'}</a></div><div class="panel"><h2>Última lección visitada</h2><p style="font-size:12px">${esc(resumeLesson().title)}</p><a class="btn btn-primary btn-small" href="#lesson/${resumeLesson().id}">Continuar ${icon('arrow')}</a></div></div><div class="dashboard-grid"><div class="panel"><h2>Tus marcadores</h2>${progress.bookmarks.filter(id => lessons.some(l => l.id === id)).length ? lessons.filter(l => progress.bookmarks.includes(l.id)).map(l => `<a class="saved-item" href="#lesson/${l.id}">${icon('bookmark')} ${esc(l.title)} ${icon('arrow')}</a>`).join('') : '<div class="empty">Guarda una lección desde sus controles para volver a ella fácilmente.</div>'}<h2 style="margin-top:25px">Tus apuntes</h2>${lessons.filter(l => progress.notes[l.id]?.trim()).length ? lessons.filter(l => progress.notes[l.id]?.trim()).map(l => `<a class="saved-item" href="#lesson/${l.id}">${esc(l.title)}<small>${esc(progress.notes[l.id])}</small></a>`).join('') : '<div class="empty">Tus ideas merecen un lugar. Escribe tu primer apunte dentro de una lección.</div>'}</div><div>${assessmentHistory() || '<div class="panel"><h2>Evaluaciones</h2><p class="muted" style="font-size:12px">Todavía no realizaste una evaluación.</p></div>'}</div></div>`;
+}
+function toolsPage(tab = 'glossary') {
+    return pageHeading('Un poco de ayuda, siempre a mano.', 'Conceptos claros y referencias para acompañar tu aprendizaje.') + `<div class="tools-tabs"><a href="#tools/glossary" class="${tab === 'glossary' ? 'active' : ''}">Glosario de conceptos</a><a href="#tools/complexity" class="${tab === 'complexity' ? 'active' : ''}">Comparador y referencia Big O</a></div>` + (tab === 'complexity' ? `<div class="panel"><h2>Cómo crece el trabajo</h2><p>Compara las funciones representativas de distintas clases de crecimiento. Son cantidades matemáticas orientativas, no tiempos medidos ni predicciones del rendimiento de Java.</p><label for="complexity-n" class="notes-label">Tamaño de entrada n (1–100)</label><input id="complexity-n" type="range" min="1" max="100" value="10" style="width:min(100%,440px);accent-color:var(--accent)"><p class="muted" style="font-size:11px">n = <strong id="n-value">10</strong></p><div class="table-wrap"><table><thead><tr><th>Clase</th><th>Función representativa</th><th>Valor para n</th><th>Ejemplo bajo sus supuestos</th></tr></thead><tbody id="complexity-rows"></tbody></table></div><div class="notice">Big O expresa una cota asintótica, no un número exacto de operaciones. Las constantes, la implementación y los datos también influyen. La búsqueda binaria requiere acceso aleatorio y datos ordenados; el costo promedio de una tabla hash depende de una buena dispersión y del control de su carga.</div></div>` : `<div class="toolbar"><label for="glossary-search" class="skip-link">Filtrar glosario</label><input class="input" id="glossary-search" placeholder="Buscar un término: invariante, recursión, arreglo…" aria-label="Filtrar glosario"></div><div id="glossary-grid" class="glossary-grid">${glossaryHtml('')}</div>`);
+}
+function glossaryHtml(query) { const entries = glossary.filter(g => normalize(g.term + ' ' + g.definition).includes(normalize(query))); return entries.length ? entries.map(g => `<article><h3>${esc(g.term)}</h3><p>${esc(g.definition)}</p>${g.lessonId ? `<a class="text-link" style="margin-top:13px" href="#lesson/${g.lessonId}">Explorar el concepto ${icon('arrow')}</a>` : ''}</article>`).join('') : '<div class="empty">No encontramos ese término. Prueba con otra palabra.</div>'; }
+function complexityRows(n) {
+    const factorialLog = Array.from({ length: n }, (_, i) => Math.log10(i + 1)).reduce((a, b) => a + b, 0);
+    const fact = factorialLog > 12 ? `${Math.pow(10, factorialLog % 1).toFixed(2)} × 10^${Math.floor(factorialLog)}` : Math.round(Math.pow(10, factorialLog)).toLocaleString('es-UY');
+    const number = (x) => x > 1e12 ? x.toExponential(2).replace('e+', ' × 10^') : x.toLocaleString('es-UY', { maximumFractionDigits: 2 });
+    return [['O(1)', '1', '1', 'Acceso a un arreglo por índice'], ['O(log n)', 'log₂ n', number(Math.log2(n)), 'Búsqueda binaria en un arreglo ordenado'], ['O(n)', 'n', number(n), 'Recorrer un arreglo'], ['O(n log n)', 'n · log₂ n', number(n * Math.log2(n)), 'Merge Sort (tiempo)'], ['O(n²)', 'n²', number(n * n), 'Comparar todos los pares'], ['O(2ⁿ)', '2ⁿ', number(2 ** n), 'Enumerar todos los subconjuntos'], ['O(n!)', 'n!', fact, 'Enumerar todas las permutaciones']].map(r => `<tr><td><code>${r[0]}</code></td><td>${r[1]}</td><td>${r[2]}</td><td>${r[3]}</td></tr>`).join('');
+}
+function labPage() { return pageHeading('Mira lo que pasa entre líneas.', 'Cambia los datos, haz preguntas y observa cómo responde cada algoritmo.') + `<div id="main-lab"></div><div class="notice">Este laboratorio calcula estados reales de seis algoritmos en el navegador. Los laboratorios de AVL, grafos y las otras estructuras se incorporarán junto con sus módulos.</div>`; }
+function notFound() { return `<div class="panel"><h1>No encontramos esta página.</h1><p>Puedes retomar tu recorrido desde el programa del curso.</p><a class="btn btn-primary" href="#course">Volver al curso ${icon('arrow')}</a></div>`; }
+function render(keepScroll = false) {
+    const oldScroll = window.scrollY;
+    cleanup?.();
+    cleanup = undefined;
+    route = location.hash.slice(1) || 'dashboard';
+    const [page, id, filter] = route.split('/');
+    let body = '', title = 'Mi dashboard';
+    if (page === 'dashboard')
+        body = dashboard();
+    else if (page === 'course') {
+        body = coursePage(id ? Number(id) : undefined);
+        title = 'Ruta del curso';
+    }
+    else if (page === 'module') {
+        body = modulePage(Number(id));
+        title = `Módulo ${pad(Number(id))}`;
+    }
+    else if (page === 'lesson') {
+        body = lessonPage(id);
+        title = 'Aprender · Módulo 01';
+    }
+    else if (page === 'lab') {
+        body = labPage();
+        title = 'Laboratorio interactivo';
+    }
+    else if (page === 'exercises') {
+        body = id && id !== 'filter' ? exercisePage(id) : exerciseList(id === 'filter' ? filter : 'all');
+        title = 'Banco de ejercicios';
+    }
+    else if (page === 'assessment') {
+        body = assessmentPage();
+        title = 'Evaluaciones';
+    }
+    else if (page === 'progress') {
+        body = progressPage();
+        title = 'Mi progreso';
+    }
+    else if (page === 'tools') {
+        body = toolsPage(id);
+        title = 'Herramientas';
+    }
+    else
+        body = notFound();
+    app.innerHTML = shell(body, title);
+    document.title = `${title} · Algoritmia`;
+    if (page === 'lab')
+        cleanup = mountLab(document.querySelector('#main-lab'), (['max', 'reverse', 'duplicates', 'linear', 'binary', 'bubble'].includes(id) ? id : 'max'));
+    if (page === 'lesson') {
+        const lesson = lessons.find(l => l.id === id);
+        if (lesson?.visualization)
+            cleanup = id === 'recursion' ? mountRecursion(document.querySelector('#lesson-lab')) : mountLab(document.querySelector('#lesson-lab'), lesson.visualization);
+        document.querySelector('#lesson-notes')?.addEventListener('input', event => { progress.notes[id] = event.target.value; const saved = persist(); document.querySelector('#notes-status').textContent = saved ? 'Apuntes guardados' : 'No se pudieron guardar. Copia tus apuntes antes de cerrar.'; });
+    }
+    if (page === 'exercises' && id && id !== 'filter') {
+        document.querySelector('#java-editor')?.addEventListener('input', event => { const value = event.target.value; progress.drafts[id] = value; const saved = persist(); document.querySelector('#draft-status').textContent = saved ? 'Borrador guardado' : 'No se pudo guardar. Descarga tu código antes de cerrar.'; document.querySelector('#highlight-preview').innerHTML = codeBlock(value); });
+        document.querySelector('#java-editor')?.addEventListener('keydown', event => { const e = event; if (e.key === 'Tab' && !e.shiftKey) {
+            e.preventDefault();
+            const el = e.target;
+            el.setRangeText('    ', el.selectionStart, el.selectionEnd, 'end');
+            el.dispatchEvent(new Event('input'));
+        } });
+    }
+    document.querySelector('#glossary-search')?.addEventListener('input', event => { document.querySelector('#glossary-grid').innerHTML = glossaryHtml(event.target.value); });
+    document.querySelector('#complexity-n')?.addEventListener('input', event => { const n = Number(event.target.value); document.querySelector('#n-value').textContent = String(n); document.querySelector('#complexity-rows').innerHTML = complexityRows(n); });
+    if (document.querySelector('#complexity-rows'))
+        document.querySelector('#complexity-rows').innerHTML = complexityRows(10);
+    if (!keepScroll)
+        window.scrollTo({ top: 0, behavior: 'instant' });
+    else
+        window.scrollTo({ top: oldScroll, behavior: 'instant' });
+}
+function normalize(s) { return s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim().replace(/\s+/g, ' '); }
+function download(filename, data, type) { const url = URL.createObjectURL(new Blob([data], { type })); const a = document.createElement('a'); a.href = url; a.download = filename; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000); }
+app.addEventListener('click', async (event) => {
+    const target = event.target.closest('[data-action], [data-copy]');
+    if (!target)
+        return;
+    if (target.hasAttribute('data-copy')) {
+        try {
+            await navigator.clipboard.writeText(target.closest('.code-block').querySelector('code').textContent);
+            toast('Código copiado');
+        }
+        catch {
+            toast('Selecciona el código para copiarlo.');
+        }
+        return;
+    }
+    const action = target.dataset.action, id = target.dataset.id;
+    if (action === 'menu') {
+        document.querySelector('.sidebar').classList.add('open');
+        document.querySelector('.mobile-overlay').classList.add('visible');
+        target.setAttribute('aria-expanded', 'true');
+    }
+    if (action === 'close-menu') {
+        document.querySelector('.sidebar').classList.remove('open');
+        document.querySelector('.mobile-overlay').classList.remove('visible');
+        document.querySelector('.mobile-menu')?.setAttribute('aria-expanded', 'false');
+    }
+    if (action === 'search')
+        openSearch();
+    if (action === 'theme') {
+        const theme = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+        document.documentElement.dataset.theme = theme;
+        try {
+            localStorage.setItem('algoritmia.theme', theme);
+        }
+        catch { }
+        target.innerHTML = icon(theme === 'dark' ? 'sun' : 'moon') + `<span>Cambiar a modo ${theme === 'dark' ? 'claro' : 'oscuro'}</span>`;
+    }
+    if (action === 'complete') {
+        progress.completed = progress.completed.includes(id) ? progress.completed.filter(x => x !== id) : [...progress.completed, id];
+        persist();
+        render(true);
+        toast(progress.completed.includes(id) ? 'Lección completada. Un paso más en tu recorrido.' : 'Lección marcada como pendiente');
+    }
+    if (action === 'bookmark') {
+        progress.bookmarks = progress.bookmarks.includes(id) ? progress.bookmarks.filter(x => x !== id) : [...progress.bookmarks, id];
+        persist();
+        target.innerHTML = icon('bookmark') + (progress.bookmarks.includes(id) ? 'Guardado en marcadores' : 'Guardar lección');
+        toast(progress.bookmarks.includes(id) ? 'Lección guardada en tus marcadores' : 'Marcador eliminado');
+    }
+    if (action === 'print')
+        window.print();
+    if (action === 'export')
+        download('algoritmia-progreso.json', JSON.stringify({ ...progress, exportedAt: new Date().toISOString() }, null, 2), 'application/json');
+    if (action === 'hint') {
+        const e = exercises.find(e => e.id === id);
+        exerciseHint = Math.min(exerciseHint + 1, e.hints.length);
+        document.querySelector('#hints').innerHTML = e.hints.slice(0, exerciseHint).map((h, i) => `<p style="font-size:12px"><strong>Pista ${i + 1}.</strong> ${esc(h)}</p>`).join('');
+        target.textContent = `Ver pista (${exerciseHint}/${e.hints.length})`;
+        if (exerciseHint === e.hints.length)
+            target.setAttribute('disabled', '');
+    }
+    if (action === 'solution') {
+        showSolution = !showSolution;
+        const e = exercises.find(e => e.id === id);
+        document.querySelector('#solution').innerHTML = showSolution ? solutionHtml(e) : '';
+        target.innerHTML = `${showSolution ? 'Ocultar' : 'Consultar'} la solución explicada ${icon('arrow')}`;
+    }
+    if (action === 'attempt-code') {
+        const e = exercises.find(e => e.id === id);
+        const code = document.querySelector('#java-editor').value;
+        if (!code.trim() || code === e.starter) {
+            toast('Modifica el código para registrar tu propio intento.');
+            return;
+        }
+        progress.drafts[id] = code;
+        (progress.exerciseAttempts[id] ??= []).push({ at: new Date().toISOString(), response: code, correct: null, manual: false });
+        persist();
+        attempted = true;
+        render(true);
+        toast('Intento guardado. Ya puedes consultar la solución.');
+    }
+    if (action === 'download-code') {
+        const e = exercises.find(e => e.id === id);
+        const code = progress.drafts[id] || e.starter;
+        const className = code.match(/\bclass\s+([A-Za-z_$][\w$]*)/);
+        download(className ? className[1] + '.java' : 'Solucion.java', className ? code : 'public class Solucion {\n' + code.split('\n').map(line => '    ' + line).join('\n') + '\n}\n', 'text/x-java-source');
+    }
+    if (action === 'self-review') {
+        (progress.exerciseAttempts[id] ??= []).push({ at: new Date().toISOString(), response: progress.drafts[id] || '', correct: null, manual: true });
+        persist();
+        render(true);
+        toast('Revisión personal registrada');
+    }
+    if (action === 'quiz-start') {
+        quiz = { active: true, index: 0, answers: [], checked: false, finished: false };
+        render();
+    }
+    if (action === 'quiz-next') {
+        if (quiz.index < questions.length - 1) {
+            quiz.index++;
+            quiz.checked = false;
+        }
+        else {
+            const mistakes = questions.filter((q, i) => quiz.answers[i] !== q.answer).map(q => q.id);
+            progress.assessments.push({ at: new Date().toISOString(), score: Math.round((questions.length - mistakes.length) / questions.length * 100), answers: [...quiz.answers], mistakes });
+            persist();
+            quiz.active = false;
+            quiz.finished = true;
+        }
+        render();
+    }
+});
+app.addEventListener('submit', event => {
+    const form = event.target;
+    if (form.id === 'answer-form') {
+        event.preventDefault();
+        const id = form.dataset.id, e = exercises.find(e => e.id === id);
+        const response = document.querySelector('#exercise-answer').value.trim();
+        if (!response)
+            return;
+        const correct = checkExerciseAnswer(e, response);
+        (progress.exerciseAttempts[id] ??= []).push({ at: new Date().toISOString(), response, correct, manual: false });
+        persist();
+        attempted = true;
+        render(true);
+        document.querySelector('#exercise-feedback').innerHTML = `<div class="feedback ${correct ? '' : 'incorrect'}"><h3>${correct ? 'Correcto. Tu razonamiento funciona.' : 'Todavía no. Sigue la traza y vuelve a intentarlo.'}</h3><p>${correct ? esc(e.explanation) : 'Puedes consultar una pista o abrir la solución explicada. Este intento quedó registrado para tu repaso.'}</p></div>`;
+    }
+    if (form.id === 'quiz-form') {
+        event.preventDefault();
+        const answer = new FormData(form).get('answer');
+        if (answer === null)
+            return;
+        quiz.answers[quiz.index] = Number(answer);
+        quiz.checked = true;
+        render(true);
+    }
+});
+function openSearch() {
+    const dialog = document.querySelector('#search-dialog');
+    dialog.innerHTML = `<div class="search-top">${icon('search')}<input id="global-search" placeholder="¿Qué quieres aprender?" aria-label="Buscar conceptos, módulos y lecciones" autocomplete="off"><button class="icon-btn" id="close-search" aria-label="Cerrar búsqueda">${icon('close')}</button></div><div class="search-results" id="search-results"></div><div class="search-caption">Busca lecciones, conceptos o temas de los 16 módulos. Esc para cerrar.</div>`;
+    const update = (query) => { const q = normalize(query); const results = [...lessons.map(l => ({ title: l.title, detail: 'Lección disponible · Módulo 01', href: `#lesson/${l.id}`, search: l.title + ' ' + l.summary + ' ' + l.objectives.join(' ') })), ...modules.map(m => ({ title: `${pad(m.id)}. ${m.title}`, detail: m.available ? 'Módulo disponible' : 'Programa · Contenido en preparación', href: `#module/${m.id}`, search: m.title + ' ' + m.topics.join(' ') })), ...glossary.map(g => ({ title: g.term, detail: g.definition, href: g.lessonId ? `#lesson/${g.lessonId}` : '#tools', search: g.term + ' ' + g.definition }))].filter(r => !q || normalize(r.search).includes(q)).slice(0, 18); document.querySelector('#search-results').innerHTML = results.length ? results.map(r => `<a class="search-result" href="${r.href}"><strong>${esc(r.title)}</strong><small>${esc(r.detail)}</small></a>`).join('') : '<div class="empty">No encontramos resultados. Prueba otra palabra.</div>'; };
+    update('');
+    dialog.showModal();
+    document.querySelector('#global-search').focus();
+    document.querySelector('#global-search').addEventListener('input', e => update(e.target.value));
+    document.querySelector('#close-search').addEventListener('click', () => dialog.close());
+    dialog.querySelector('.search-results').addEventListener('click', e => { const a = e.target.closest('a'); if (a) {
+        dialog.close();
+        if (a.hash === location.hash)
+            render();
+    } });
+}
+document.querySelector('a.skip-link')?.addEventListener('click', event => { event.preventDefault(); document.querySelector('#main')?.focus(); document.querySelector('#main')?.scrollIntoView(); });
+window.addEventListener('hashchange', () => { exerciseHint = 0; showSolution = false; render(); });
+document.addEventListener('keydown', event => { if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+    event.preventDefault();
+    if (!document.querySelector('#search-dialog').open)
+        openSearch();
+} if (event.key === 'Escape') {
+    document.querySelector('.sidebar')?.classList.remove('open');
+    document.querySelector('.mobile-overlay')?.classList.remove('visible');
+} });
+let lastActivity = Date.now(), lastTick = Date.now();
+for (const type of ['pointerdown', 'keydown', 'scroll', 'mousemove', 'touchstart'])
+    window.addEventListener(type, () => { lastActivity = Date.now(); }, { passive: true });
+window.addEventListener('focus', () => { lastActivity = Date.now(); lastTick = Date.now(); });
+document.addEventListener('visibilitychange', () => { lastTick = Date.now(); if (document.visibilityState === 'visible')
+    lastActivity = Date.now();
+else
+    persist(); });
+setInterval(() => { const now = Date.now(), elapsed = (now - lastTick) / 1000; lastTick = now; if (document.visibilityState === 'visible' && document.hasFocus() && now - lastActivity < 120000 && elapsed < 15) {
+    progress.studySeconds += Math.floor(elapsed);
+    persist();
+} }, 5000);
+window.addEventListener('pagehide', persist);
+render();
