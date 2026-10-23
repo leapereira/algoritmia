@@ -4,9 +4,12 @@ import type { ModuleContent } from './types.js';
 
 import { module02 } from './module02.js';
 
+import { module03 } from './module03.js';
+
 export const moduleContents: ModuleContent[] = [
   { moduleId: 1, lessons: firstLessons, exercises: firstExercises, questions: firstQuestions, glossary: firstGlossary },
   module02,
+  module03,
 ];
 export { blocks };
 export const lessons = moduleContents.flatMap(content => content.lessons);
