@@ -18,7 +18,7 @@ Abrir http://127.0.0.1:4173. Para comprobar tipos, generar la aplicación y ejec
 npm test
 ```
 
-El paso `pretest` ejecuta el build, que verifica TypeScript en modo estricto y genera `dist/`. También se puede ejecutar `npm run typecheck` por separado. Las rutas usan fragmentos de URL, por lo que `dist/` puede alojarse en un servidor estático sin reglas especiales de navegación.
+El paso `pretest` ejecuta el build, que verifica TypeScript en modo estricto y genera `dist/`, incluidas las 100 imágenes descargables de `figures/`. También se puede ejecutar `npm run typecheck` por separado. Las rutas usan fragmentos de URL, por lo que `dist/` puede alojarse en un servidor estático sin reglas especiales de navegación.
 
 ## Curso y herramientas
 
@@ -26,6 +26,7 @@ El paso `pretest` ejecuta el build, que verifica TypeScript en modo estricto y g
 - Ochenta y tres ejercicios de predicción, complejidad, depuración e implementación, con pistas progresivas, explicación e historial. Las respuestas textuales se comprueban automáticamente; las implementaciones se revisan manualmente.
 - Una evaluación independiente por módulo, con preguntas de varios tipos, opciones barajadas, explicaciones, resultados históricos y temas para repasar.
 - Editor Java con borradores locales, resaltado de sintaxis y descarga de archivos. **No compila ni ejecuta Java en el navegador ni en un servidor.** Los resultados de revisión personal están identificados como tales.
+- Cien esquemas didácticos con ejemplos, relaciones, etiquetas y explicación: uno por módulo y uno en cada lección. Se pueden ampliar, recorrer con teclado, imprimir y descargar como SVG.
 - Dashboard, progreso por módulo y bloque, reanudación, apuntes, marcadores, búsqueda, glosario y comparador Big O.
 - Tema claro/oscuro, diseño adaptable, controles de teclado e impresión de lecciones.
 
@@ -66,6 +67,7 @@ La ejecución registrada de `npm test` completa **60 pruebas**, además de verif
 - `src/lab.ts` y `src/playgrounds.ts`: visualización y controles interactivos.
 - `src/learning.ts`, `assessment.ts` y `answers.ts`: progreso, evaluación y comprobación de respuestas.
 - `src/storage.ts`: validación, fusión y persistencia local.
+- `src/learning-figures.ts`, `src/lesson-visuals-*.ts` y `src/module-art.ts`: esquemas didácticos y vista ampliada.
 - `src/app.ts`: navegación y flujos de aprendizaje.
 - `tests/`: pruebas de motores, integridad académica, calificaciones y recuperación/fusión de datos.
 

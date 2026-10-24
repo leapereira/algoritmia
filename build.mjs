@@ -1,4 +1,4 @@
-import { readdir, mkdir, copyFile, rm } from 'node:fs/promises';
+import { readdir, mkdir, copyFile, rm, writeFile } from 'node:fs/promises';
 import { join, relative, dirname } from 'node:path';
 import { execFileSync } from 'node:child_process';
 await rm('dist', { recursive: true, force: true });
@@ -15,4 +15,14 @@ async function walk(dir) {
   }
 }
 await walk('src');
+const { lessonVisuals, visualSvg } = await import('./dist/learning-figures.js');
+const { moduleVisuals } = await import('./dist/module-art.js');
+for (const [kind, visuals] of [['lesson', lessonVisuals], ['module', moduleVisuals]]) {
+  const directory = join('dist', 'figures', kind);
+  await mkdir(directory, { recursive: true });
+  for (const [id, visual] of Object.entries(visuals)) {
+    if (!/^[a-z0-9-]+$/.test(id)) throw new Error(`Invalid figure id: ${id}`);
+    await writeFile(join(directory, `${id}.svg`), visualSvg(visual));
+  }
+}
 console.log('TypeScript verified. Static application built in dist/');

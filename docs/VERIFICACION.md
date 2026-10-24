@@ -57,3 +57,12 @@ También se observaron dashboard y lección a 390 píxeles de ancho sin desborda
 Los dieciséis módulos tienen lecciones, ejercicios y evaluación; los módulos 2–16 ya no son contenido pendiente. Los laboratorios disponibles cubren algoritmos de búsqueda y ordenamiento, recursión, estructuras fundamentales, grafos, actividades voraces, LCS, N reinas, LRU, Segment Tree/Fenwick y análisis de costos. No cada tema del programa dispone de una simulación propia.
 
 El progreso se guarda localmente por origen y no se sincroniza entre dispositivos. Las referencias enlazadas por módulo son material académico y documentación primaria de MIT, Princeton, Stanford y Oracle. La presencia de esos enlaces no implica que todas las páginas externas se hayan vuelto a comprobar en esta ejecución de pruebas.
+
+
+## Esquemas didácticos
+
+La ampliación visual incorpora 100 esquemas: 16 ejemplos introductorios de módulos y un esquema específico para cada una de las 84 lecciones. Los gráficos explican datos, operaciones, referencias, recorridos o dependencias con etiquetas y texto alternativo. Se revisaron los ejemplos numéricos y su correspondencia con las lecciones, incluidos los tres recorridos DFS del árbol 8–3–10 con hijos 1 y 6, rotaciones AVL, intervalos, rutas y tablas LCS.
+
+Se comprobó la cobertura exacta de módulos/lecciones, el XML válido y la descripción accesible de los 100 SVG. Una revisión geométrica en navegador de sus etiquetas no detectó textos recortados ni superpuestos. El build exporta las imágenes a `dist/figures/module/` y `dist/figures/lesson/` para descarga independiente.
+
+En el navegador se verificaron la figura de la lección DFS, la ampliación a 1120 píxeles, cierre por botón y Escape y el ejemplo LCS del módulo 13. La descarga de `m06-dfs.svg` produjo XML válido idéntico al archivo construido. A 390 píxeles la página no desbordó horizontalmente; las figuras desplazables conservaron etiquetas legibles y respondieron a Inicio/Fin, incluida la vista ampliada. Las 60 pruebas existentes y la comprobación estricta de TypeScript continuaron aprobadas. La consola de la sesión revisada no registró errores.
