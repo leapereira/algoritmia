@@ -1,10 +1,10 @@
 # Algoritmia
 
-Aula de algoritmos y estructuras de datos en español, con Java como lenguaje didáctico. Primera edición funcional: estructura de los cuatro bloques y los dieciséis módulos, con el módulo 1 completamente desarrollado. El programa original se conserva en `docs/`.
+Aula interactiva de algoritmos y estructuras de datos en español, con Java como lenguaje didáctico. Los cuatro bloques y los dieciséis módulos están disponibles: **84 lecciones, 83 ejercicios, 166 preguntas y 122 términos de glosario**. El programa conserva sus 135 temas y 16 prácticas en `docs/TEMARIO.md`.
 
 ## Iniciar
 
-Requiere Node.js 24 o superior. Sin dependencias de ejecución; TypeScript se utiliza durante el desarrollo.
+Requiere Node.js 24 o superior. La aplicación publicada es estática y no tiene dependencias de ejecución; TypeScript se utiliza durante el desarrollo.
 
 ```sh
 npm ci
@@ -12,46 +12,61 @@ npm run build
 npm run dev
 ```
 
-Abrir http://127.0.0.1:4173. Para verificar los algoritmos, datos y persistencia:
+Abrir http://127.0.0.1:4173. Para comprobar tipos, generar la aplicación y ejecutar las pruebas:
 
 ```sh
-npm run build
 npm test
 ```
 
-El build verifica tipos en modo estricto con el compilador de TypeScript, genera los módulos JavaScript y copia los recursos estáticos. `dist/` puede servirse en cualquier servidor estático; las rutas usan fragmentos de URL.
+El paso `pretest` ejecuta el build, que verifica TypeScript en modo estricto y genera `dist/`. También se puede ejecutar `npm run typecheck` por separado. Las rutas usan fragmentos de URL, por lo que `dist/` puede alojarse en un servidor estático sin reglas especiales de navegación.
 
-## Incluido
+## Curso y herramientas
 
-- Dashboard con estadísticas derivadas de la actividad real y reanudación.
-- Programa exacto: 4 bloques, 16 módulos, 135 temas y 16 prácticas.
-- Seis lecciones completas del módulo 1, cada una con objetivos, teoría, ejemplos Java, complejidad, casos límite, resolución y práctica.
-- Laboratorio de máximo, inversión, duplicados, búsquedas lineal/binaria y Bubble Sort, más una visualización de la pila recursiva. Trazas reales, pasos adelante/atrás, reproducción, velocidad, entrada personalizada, pseudocódigo y contadores.
-- Seis ejercicios con respuestas comprobables o revisión manual explícita, pistas e historial.
-- Editor Java, borradores persistentes, vista de sintaxis y descarga. **No compila ni ejecuta Java.** La revisión personal se distingue de la validación automática.
-- Evaluación de doce preguntas, explicaciones inmediatas, repetición, notas históricas y recomendaciones de repaso.
-- Apuntes por lección, marcadores, búsqueda, glosario y comparador Big O.
-- Tema claro/oscuro, diseño responsive, controles de teclado e impresión de lecciones.
+- Dieciséis módulos con objetivos, prerrequisitos, teoría, ejemplos Java, correctitud, complejidad, casos límite, ejercicios resueltos y práctica independiente.
+- Ochenta y tres ejercicios de predicción, complejidad, depuración e implementación, con pistas progresivas, explicación e historial. Las respuestas textuales se comprueban automáticamente; las implementaciones se revisan manualmente.
+- Una evaluación independiente por módulo, con preguntas de varios tipos, opciones barajadas, explicaciones, resultados históricos y temas para repasar.
+- Editor Java con borradores locales, resaltado de sintaxis y descarga de archivos. **No compila ni ejecuta Java en el navegador ni en un servidor.** Los resultados de revisión personal están identificados como tales.
+- Dashboard, progreso por módulo y bloque, reanudación, apuntes, marcadores, búsqueda, glosario y comparador Big O.
+- Tema claro/oscuro, diseño adaptable, controles de teclado e impresión de lecciones.
 
-## Alcance pendiente
+El avance global asigna igual peso a los dieciséis módulos: mitad lecciones y mitad evaluación. Cada módulo se completa al marcar sus propias lecciones y alcanzar al menos 70 % en su evaluación. Aprobar uno no acredita otro. Los ejercicios revisados personalmente se incluyen en la métrica de ejercicios, con la distinción visible de revisión manual.
 
-Los módulos 2–16 conservan todos los temas y prácticas, pero se identifican como «En preparación»: no se presentan como contenido ya desarrollado. Sus lecciones, ejercicios, evaluaciones y laboratorios de estructuras avanzadas son trabajo futuro. La lección de recursividad incluye un laboratorio propio que representa la pila de llamadas, el caso base y los retornos de una suma recursiva.
+La duración mostrada junto a una lección es una estimación de estudio. El contador de tiempo registra actividad con la ventana visible, foco e interacción reciente; se pausa tras dos minutos sin interacción.
 
-La ejecución de Java requiere incorporar un servicio aislado con límites de tiempo, memoria y recursos. No se simulan resultados. No hay autenticación ni sincronización entre dispositivos.
+## Laboratorios disponibles
 
-## Arquitectura
+- Máximo, inversión, duplicados y búsquedas lineal/binaria.
+- Bubble, Selection, Insertion, Merge, Quick, Heap, Counting y Radix Sort.
+- Pila de llamadas de una suma recursiva: caso base, marcos activos y retornos.
+- Lista enlazada, pila, cola, ABB, AVL con rotaciones, Min-Heap, tabla hash y Trie con autocompletado.
+- Grafos: BFS, DFS, Dijkstra, Bellman-Ford, Prim, Kruskal y ordenamiento topológico, con validación de sus precondiciones.
+- Selección voraz de actividades, tabla LCS y backtracking de N reinas.
+- Caché LRU, consultas y actualizaciones con Segment Tree/Fenwick, y conteos de complejidad y amortización.
 
-- `src/data/`: contenido académico independiente de la interfaz.
-- `src/algorithms.ts`: motores de algoritmos puros y sus trazas.
-- `src/lab.ts`: visualización y reproductor.
-- `src/storage.ts`: repositorio local, validación y reconstrucción de calificaciones.
-- `src/app.ts`: navegación, componentes y flujos de aprendizaje.
-- `tests/`: pruebas de trazas, integridad de contenido y recuperación de datos.
+Las trazas de algoritmos permiten avanzar, retroceder, reproducir y cambiar velocidad y datos. Los widgets de estructuras permiten realizar operaciones y observar el estado resultante. Las demostraciones ejecutan lógica JavaScript real; no son una ejecución de los fragmentos Java del curso. Cada laboratorio limita tamaños y entradas para mantener la visualización legible. Las simulaciones cubren una selección del temario; otros temas se trabajan mediante teoría, ejemplos y prácticas.
 
-El progreso usa localStorage del origen actual. Cambiar de localhost al sitio publicado inicia otro registro. Borrar los datos del navegador elimina el progreso de ese origen. La exportación JSON permite conservar una copia (sin importación desde la interfaz). El tiempo de estudio solo aumenta con ventana visible, foco y actividad reciente; se pausa tras dos minutos sin interacción.
+## Datos y persistencia
 
-El avance global asigna el mismo peso a cada uno de los dieciséis módulos, mitad lecciones y mitad evaluación. El módulo 1 se completa con sus seis lecciones marcadas y una evaluación de al menos 70 %. Los ejercicios Java revisados manualmente quedan identificados como tales.
+El progreso usa `localStorage` del origen actual. Cambiar de localhost al sitio publicado inicia otro registro; borrar los datos del navegador elimina el progreso de ese origen. No hay cuentas, sincronización entre dispositivos ni almacenamiento de apuntes en un servidor de la aplicación.
 
-## Publicación
+La aplicación combina cambios de pestañas del mismo origen mediante una fusión de tres vías. Conserva adiciones y eliminaciones locales, cambios de apuntes por clave e intentos de ambos lados; utiliza Web Locks para serializar guardados cuando el navegador lo ofrece. La exportación JSON permite conservar una copia; la interfaz no incluye importación.
 
-`.openai/hosting.json` configura la publicación estática en Sites. El sitio comienza con acceso privado para su propietario. Los apuntes y el progreso permanecen en el navegador, no se envían a un servidor de la aplicación. Las fuentes web se solicitan a Google Fonts; si no hay conexión se usan fuentes del sistema.
+Las calificaciones guardadas se reconstruyen desde las respuestas y el banco del módulo al cargar los datos. Los errores de almacenamiento se notifican para que se puedan copiar los apuntes o descargar el código antes de cerrar.
+
+## Referencias y verificación
+
+Las lecciones enlazan material académico y documentación primaria de MIT OpenCourseWare, Princeton, Stanford y Oracle. Las referencias se seleccionan por módulo en `src/data/references.ts`; algunas usan lenguajes distintos de Java.
+
+La ejecución registrada de `npm test` completa **60 pruebas**, además de verificar tipos y construir la aplicación. Su alcance y las comprobaciones manuales registradas se detallan en `docs/VERIFICACION.md`.
+
+## Arquitectura y publicación
+
+- `src/data/`: temario, contenido de los dieciséis módulos, agregación del curso y referencias.
+- `src/algorithms.ts`, `structures.ts`, `graph.ts`, `techniques.ts`, `ranges.ts` y `recursion.ts`: motores y estados de las demostraciones.
+- `src/lab.ts` y `src/playgrounds.ts`: visualización y controles interactivos.
+- `src/learning.ts`, `assessment.ts` y `answers.ts`: progreso, evaluación y comprobación de respuestas.
+- `src/storage.ts`: validación, fusión y persistencia local.
+- `src/app.ts`: navegación y flujos de aprendizaje.
+- `tests/`: pruebas de motores, integridad académica, calificaciones y recuperación/fusión de datos.
+
+`.openai/hosting.json` configura `dist/` como contenido estático para Sites. El acceso al sitio se administra en el alojamiento. Los apuntes y el progreso permanecen en el navegador. Google Fonts proporciona las fuentes web; sin conexión se usan fuentes del sistema.
