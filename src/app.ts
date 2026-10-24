@@ -3,7 +3,7 @@ import { moduleStats, courseProgress, gradeAssessment } from './learning.js';
 import { referencesForModule } from './data/references.js';
 import { optionOrder } from './assessment.js';
 import { javaDownload } from './java-download.js';
-import { loadProgress, saveProgress } from './storage.js';
+import { loadProgress, saveProgress, mergeProgress, PROGRESS_STORAGE_KEY } from './storage.js';
 import { checkExerciseAnswer } from './answers.js';
 import { mountLab } from './lab.js';
 import { mountRecursion } from './recursion.js';
@@ -12,6 +12,7 @@ import { algorithms, type AlgorithmId } from './algorithms.js';
 
 const app = document.querySelector<HTMLElement>('#app')!;
 const progress = loadProgress(questions);
+let progressBaseline = structuredClone(progress);
 const paths: Record<string, string> = {
   home: 'M3 10 12 3l9 7v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1Z',
   grid: 'M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h7v7h-7z',
@@ -64,7 +65,17 @@ function toast(message: string) {
   el.textContent = message; el.classList.add('visible');
   clearTimeout(toastTimer); toastTimer = setTimeout(() => el.classList.remove('visible'), 3300);
 }
-function persist(): boolean { const saved=saveProgress(progress);if (!saved) toast('No se pudo guardar. Revisa el almacenamiento del navegador.');return saved; }
+function saveSnapshot(): boolean {
+  const merged=mergeProgress(progressBaseline,progress,loadProgress(questions));
+  const saved=saveProgress(merged);
+  if(saved){Object.assign(progress,merged);progressBaseline=structuredClone(merged);}
+  else toast('No se pudo guardar. Revisa el almacenamiento del navegador.');
+  return saved;
+}
+async function persist(): Promise<boolean> {
+  if(navigator.locks){try{return await navigator.locks.request('algoritmia-progress',saveSnapshot);}catch{return saveSnapshot();}}
+  return saveSnapshot();
+}
 function navigate(hash: string) { if (location.hash === hash) render(); else location.hash = hash; }
 function nextLesson() { return lessons.find(l => !progress.completed.includes(l.id)) || lessons[0]; }
 function resumeLesson() { return lessons.find(l => l.id === progress.lastLesson) || nextLesson(); }
@@ -192,10 +203,10 @@ function render(keepScroll=false) {
   if(page==='lesson') {
     const lesson=lessons.find(l=>l.id===id);
     const lab=lesson?lesson.lab:undefined;if(lab==='recursion'||id==='recursion')cleanup=mountRecursion(document.querySelector('#lesson-lab')!);else if(lab)cleanup=mountPlayground(document.querySelector('#lesson-lab')!,lab);else if(lesson?.visualization)cleanup=mountLab(document.querySelector('#lesson-lab')!,lesson.visualization);
-    document.querySelector('#lesson-notes')?.addEventListener('input',event=>{progress.notes[id]=(event.target as HTMLTextAreaElement).value;const saved=persist();document.querySelector('#notes-status')!.textContent=saved?'Apuntes guardados':'No se pudieron guardar. Copia tus apuntes antes de cerrar.';});
+    document.querySelector('#lesson-notes')?.addEventListener('input',async event=>{progress.notes[id]=(event.target as HTMLTextAreaElement).value;const status=document.querySelector('#notes-status');const saved=await persist();if(status?.isConnected)status.textContent=saved?'Apuntes guardados':'No se pudieron guardar. Copia tus apuntes antes de cerrar.';});
   }
   if(page==='exercises' && id && id!=='filter') {
-    document.querySelector('#java-editor')?.addEventListener('input',event=>{const value=(event.target as HTMLTextAreaElement).value;progress.drafts[id]=value;const saved=persist();document.querySelector('#draft-status')!.textContent=saved?'Borrador guardado':'No se pudo guardar. Descarga tu código antes de cerrar.';document.querySelector('#highlight-preview')!.innerHTML=codeBlock(value);});
+    document.querySelector('#java-editor')?.addEventListener('input',async event=>{const value=(event.target as HTMLTextAreaElement).value;progress.drafts[id]=value;const status=document.querySelector('#draft-status');document.querySelector('#highlight-preview')!.innerHTML=codeBlock(value);const saved=await persist();if(status?.isConnected)status.textContent=saved?'Borrador guardado':'No se pudo guardar. Descarga tu código antes de cerrar.';});
     document.querySelector('#java-editor')?.addEventListener('keydown',event=>{const e=event as KeyboardEvent;if(e.key==='Tab'&&!e.shiftKey){e.preventDefault();const el=e.target as HTMLTextAreaElement;el.setRangeText('    ',el.selectionStart,el.selectionEnd,'end');el.dispatchEvent(new Event('input'));}});
   }
   document.querySelector('#exercise-module')?.addEventListener('change',event=>{const moduleId=Number((event.target as HTMLSelectElement).value);navigate(moduleId?`#exercises/module/${moduleId}`:'#exercises');});
@@ -215,21 +226,21 @@ app.addEventListener('click',async event=>{
   if(action==='close-menu'){document.querySelector('.sidebar')!.classList.remove('open');document.querySelector('.mobile-overlay')!.classList.remove('visible');document.querySelector('.mobile-menu')?.setAttribute('aria-expanded','false');}
   if(action==='search')openSearch();
   if(action==='theme'){const theme=document.documentElement.dataset.theme==='dark'?'light':'dark';document.documentElement.dataset.theme=theme;try{localStorage.setItem('algoritmia.theme',theme);}catch{}target.innerHTML=icon(theme==='dark'?'sun':'moon')+`<span>Cambiar a modo ${theme==='dark'?'claro':'oscuro'}</span>`;}
-  if(action==='complete'){progress.completed=progress.completed.includes(id)?progress.completed.filter(x=>x!==id):[...progress.completed,id];persist();render(true);toast(progress.completed.includes(id)?'Lección completada. Un paso más en tu recorrido.':'Lección marcada como pendiente');}
-  if(action==='bookmark'){progress.bookmarks=progress.bookmarks.includes(id)?progress.bookmarks.filter(x=>x!==id):[...progress.bookmarks,id];persist();target.innerHTML=icon('bookmark')+(progress.bookmarks.includes(id)?'Guardado en marcadores':'Guardar lección');toast(progress.bookmarks.includes(id)?'Lección guardada en tus marcadores':'Marcador eliminado');}
+  if(action==='complete'){progress.completed=progress.completed.includes(id)?progress.completed.filter(x=>x!==id):[...progress.completed,id];const saved=await persist();render(true);if(saved)toast(progress.completed.includes(id)?'Lección completada. Un paso más en tu recorrido.':'Lección marcada como pendiente');}
+  if(action==='bookmark'){progress.bookmarks=progress.bookmarks.includes(id)?progress.bookmarks.filter(x=>x!==id):[...progress.bookmarks,id];const saved=await persist();target.innerHTML=icon('bookmark')+(progress.bookmarks.includes(id)?'Guardado en marcadores':'Guardar lección');toast(progress.bookmarks.includes(id)?'Lección guardada en tus marcadores':'Marcador eliminado');}
   if(action==='print')window.print();
   if(action==='export')download('algoritmia-progreso.json',JSON.stringify({...progress,exportedAt:new Date().toISOString()},null,2),'application/json');
   if(action==='hint'){const e=exercises.find(e=>e.id===id)!;exerciseHint=Math.min(exerciseHint+1,e.hints.length);document.querySelector('#hints')!.innerHTML=e.hints.slice(0,exerciseHint).map((h,i)=>`<p style="font-size:12px"><strong>Pista ${i+1}.</strong> ${esc(h)}</p>`).join('');target.textContent=`Ver pista (${exerciseHint}/${e.hints.length})`;if(exerciseHint===e.hints.length)target.setAttribute('disabled','');}
   if(action==='solution'){showSolution=!showSolution;const e=exercises.find(e=>e.id===id)!;document.querySelector('#solution')!.innerHTML=showSolution?solutionHtml(e):'';target.innerHTML=`${showSolution?'Ocultar':'Consultar'} la solución explicada ${icon('arrow')}`;}
-  if(action==='attempt-code'){const e=exercises.find(e=>e.id===id)!;const code=(document.querySelector('#java-editor') as HTMLTextAreaElement).value;if(!code.trim()||code===e.starter){toast('Modifica el código para registrar tu propio intento.');return;}progress.drafts[id]=code;(progress.exerciseAttempts[id]??=[]).push({at:new Date().toISOString(),response:code,correct:null,manual:false});persist();attempted=true;render(true);toast('Intento guardado. Ya puedes consultar la solución.');}
+  if(action==='attempt-code'){const e=exercises.find(e=>e.id===id)!;const code=(document.querySelector('#java-editor') as HTMLTextAreaElement).value;if(!code.trim()||code===e.starter){toast('Modifica el código para registrar tu propio intento.');return;}progress.drafts[id]=code;(progress.exerciseAttempts[id]??=[]).push({at:new Date().toISOString(),response:code,correct:null,manual:false});const saved=await persist();attempted=true;render(true);if(saved)toast('Intento guardado. Ya puedes consultar la solución.');}
   if(action==='download-code'){const e=exercises.find(e=>e.id===id)!;const file=javaDownload(progress.drafts[id]||e.starter);download(file.filename,file.source,'text/x-java-source');}
-  if(action==='self-review'){(progress.exerciseAttempts[id]??=[]).push({at:new Date().toISOString(),response:progress.drafts[id]||'',correct:null,manual:true});persist();render(true);toast('Revisión personal registrada');}
+  if(action==='self-review'){(progress.exerciseAttempts[id]??=[]).push({at:new Date().toISOString(),response:progress.drafts[id]||'',correct:null,manual:true});const saved=await persist();render(true);if(saved)toast('Revisión personal registrada');}
   if(action==='quiz-start'){const moduleId=Number(target.dataset.module)||1;quiz={moduleId,active:true,index:0,answers:[],checked:false,finished:false,optionOrder:moduleQuestions(moduleId).map(q=>optionOrder(q.options.length))};render();}
-  if(action==='quiz-next'){const bank=moduleQuestions(quiz.moduleId);if(quiz.index<bank.length-1){quiz.index++;quiz.checked=false;}else{progress.assessments.push(gradeAssessment(quiz.moduleId,questions,quiz.answers));persist();quiz.active=false;quiz.finished=true;}render();}
+  if(action==='quiz-next'){const bank=moduleQuestions(quiz.moduleId);if(quiz.index<bank.length-1){quiz.index++;quiz.checked=false;}else{progress.assessments.push(gradeAssessment(quiz.moduleId,questions,quiz.answers));quiz.active=false;quiz.finished=true;await persist();}render();}
 });
-app.addEventListener('submit',event=>{
+app.addEventListener('submit',async event=>{
   const form=event.target as HTMLFormElement;
-  if(form.id==='answer-form'){event.preventDefault();const id=form.dataset.id!,e=exercises.find(e=>e.id===id)!;const response=(document.querySelector('#exercise-answer') as HTMLInputElement).value.trim();if(!response)return;const correct=checkExerciseAnswer(e,response);(progress.exerciseAttempts[id]??=[]).push({at:new Date().toISOString(),response,correct,manual:false});persist();attempted=true;render(true);document.querySelector('#exercise-feedback')!.innerHTML=`<div class="feedback ${correct?'':'incorrect'}"><h3>${correct?'Correcto. Tu razonamiento funciona.':'Todavía no. Sigue la traza y vuelve a intentarlo.'}</h3><p>${correct?esc(e.explanation):'Puedes consultar una pista o abrir la solución explicada. Este intento quedó registrado para tu repaso.'}</p></div>`;}
+  if(form.id==='answer-form'){event.preventDefault();const id=form.dataset.id!,e=exercises.find(e=>e.id===id)!;const response=(document.querySelector('#exercise-answer') as HTMLInputElement).value.trim();if(!response)return;const correct=checkExerciseAnswer(e,response);(progress.exerciseAttempts[id]??=[]).push({at:new Date().toISOString(),response,correct,manual:false});await persist();attempted=true;if(location.hash!==`#exercises/${id}`)return;render(true);document.querySelector('#exercise-feedback')!.innerHTML=`<div class="feedback ${correct?'':'incorrect'}"><h3>${correct?'Correcto. Tu razonamiento funciona.':'Todavía no. Sigue la traza y vuelve a intentarlo.'}</h3><p>${correct?esc(e.explanation):'Puedes consultar una pista o abrir la solución explicada. Este intento quedó registrado para tu repaso.'}</p></div>`;}
   if(form.id==='quiz-form'){event.preventDefault();const answer=new FormData(form).get('answer');if(answer===null)return;quiz.answers[quiz.index]=Number(answer);quiz.checked=true;render(true);}
 });
 function openSearch() {
@@ -246,5 +257,13 @@ for(const type of ['pointerdown','keydown','scroll','mousemove','touchstart'])wi
 window.addEventListener('focus',()=>{lastActivity=Date.now();lastTick=Date.now();});
 document.addEventListener('visibilitychange',()=>{lastTick=Date.now();if(document.visibilityState==='visible')lastActivity=Date.now();else persist();});
 setInterval(()=>{const now=Date.now(),elapsed=(now-lastTick)/1000;lastTick=now;if(document.visibilityState==='visible'&&document.hasFocus()&&now-lastActivity<120000&&elapsed<15){progress.studySeconds+=Math.floor(elapsed);persist();}},5000);
-window.addEventListener('pagehide',persist);
+window.addEventListener('pagehide',saveSnapshot);
+window.addEventListener('storage',event=>{
+  if(event.key!==PROGRESS_STORAGE_KEY&&event.key!==null)return;
+  const latest=loadProgress(questions);
+  Object.assign(progress,mergeProgress(progressBaseline,progress,latest));
+  progressBaseline=structuredClone(latest);
+  // Keep code drafts, unanswered forms and laboratory experiments in place.
+  if(/^(dashboard|progress|course|module)(\/|$)/.test(route)&&!document.activeElement?.matches('input,textarea,select'))render(true);
+});
 render();
