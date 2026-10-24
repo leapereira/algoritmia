@@ -30,6 +30,8 @@ import { module14 } from './module14.js';
 
 import { module15 } from './module15.js';
 
+import { module16 } from './module16.js';
+
 export const moduleContents: ModuleContent[] = [
   { moduleId: 1, lessons: firstLessons, exercises: firstExercises, questions: firstQuestions, glossary: firstGlossary },
   module02,
@@ -46,6 +48,7 @@ export const moduleContents: ModuleContent[] = [
   module13,
   module14,
   module15,
+  module16,
 ];
 export { blocks };
 export const lessons = moduleContents.flatMap(content => content.lessons);
